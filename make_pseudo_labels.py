@@ -74,9 +74,12 @@ if __name__ == '__main__':
     best_f1_score = -1
     best_threshold = None
     best_predictions_dir = None
+    previous_f1_score = -1
+    consecutive_decreases = 0
+    max_consecutive_decreases = 2  # Stop after 2 consecutive decreases
 
     # Iterate through each threshold
-    for threshold in thresholds:
+    for i, threshold in enumerate(thresholds):
         print(f"Evaluating threshold: {threshold}")
 
         # Create temporary directory for current threshold predictions
@@ -128,6 +131,30 @@ if __name__ == '__main__':
                 best_f1_score = current_f1_score
                 best_threshold = threshold
                 best_predictions_dir = temp_pred_dir
+                consecutive_decreases = 0  # Reset counter when improvement is found
+            else:
+                # Check if F1 score is decreasing
+                if previous_f1_score != -1 and current_f1_score < previous_f1_score:
+                    consecutive_decreases += 1
+                else:
+                    consecutive_decreases = 0  # Reset if score increases or stays same
+
+            # Early stopping condition
+            if consecutive_decreases >= max_consecutive_decreases:
+                print(f"F1 score has decreased for {consecutive_decreases} consecutive thresholds. Stopping early.")
+
+                # Clean up remaining temporary directories that won't be used
+                for j in range(i+1, len(thresholds)):
+                    remaining_threshold = thresholds[j]
+                    remaining_temp_dir = f'./tmp/predictions/{args.experiment_name}@crf={args.crf_iteration}@255@threshold{remaining_threshold}/'
+                    if os.path.exists(remaining_temp_dir):
+                        import shutil
+                        shutil.rmtree(remaining_temp_dir)
+                        print(f"Removed unused temporary directory: {remaining_temp_dir}")
+
+                break
+
+            previous_f1_score = current_f1_score
         except Exception as e:
             print(f"Error calculating metrics for threshold {threshold}: {str(e)}")
             continue

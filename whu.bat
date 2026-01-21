@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 set CUDA_VISIBLE_DEVICES=0
-set DATA_DIR=E:\weakly_CD_dataset\WHU-CD-256\WHU-CD-256
+set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
 set PREDICT_FOLDER=./experiments/predictions/WHU_KD_T_minus_S_cat@train@scale=0.5,1.0,1.25,2.0
 
 echo ==========================================

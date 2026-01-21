@@ -30,3 +30,6 @@ Change detection data set with pixel-level binary labels；
 `label`: label maps;
 
 `list`: contains `train.txt, val.txt, test.txt`, each file records the image names (XXX.png) in the change detection dataset. It also contains `train_label.txt`, which is the image level label of training data, please run generate_cls_label.py to generate this list.
+
+
+python adapt_dataset.py --input_root E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset
