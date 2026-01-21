@@ -46,7 +46,6 @@ parser.add_argument('--image_size', default=256, type=int)
 parser.add_argument('--experiment_name', default='WHU_KD_T_minus_S_cat@train@scale=1.0,1.25,1.5', type=str)
 parser.add_argument('--domain', default='train', type=str)
 
-parser.add_argument('--threshold', default=0.65, type=float)
 parser.add_argument('--crf_iteration', default=0, type=int)
 
 
@@ -162,7 +161,7 @@ if __name__ == '__main__':
     print(f"\nBest threshold: {best_threshold} with F1 Score: {best_f1_score}")
 
     # Create final directory with best threshold and copy the best results there
-    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}@crf={args.crf_iteration}@255@threshold{best_threshold}/')
+    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}@crf={args.crf_iteration}@255/')
 
     # Copy the best predictions to the final directory
     import shutil
