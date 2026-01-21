@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\WHU-CD-256\WHU-CD-256
-set PREDICT_FOLDER=predict_folder
+set PREDICT_FOLDER=./experiments/predictions/WHU_KD_T_minus_S_cat@train@scale=0.5,1.0,1.25,2.0
 
 echo ==========================================
 echo Change Detection Pipeline Runner
