@@ -89,12 +89,17 @@ def main(args):
         print(f"[OK] {split}: {len(image_names)} samples")
 
     # ---------- copy json ----------
-    json_file = input_root / "whuCCcaptions.json"
-    if json_file.exists():
+    import glob
+    json_files = list(input_root.glob("*.json"))
+    cc_caption_files = [f for f in json_files if "CCcaptions" in f.name]
+
+    if cc_caption_files:
+        # Copy the first matching CC captions JSON file
+        json_file = cc_caption_files[0]
         shutil.copy2(json_file, output_root / json_file.name)
-        print("[OK] whuCCcaptions.json copied")
+        print(f"[OK] {json_file.name} copied")
     else:
-        print("[Warning] whuCCcaptions.json not found")
+        print("[Warning] No *CCcaptions*.json file found")
 
     print("Dataset conversion finished.")
 
