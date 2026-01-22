@@ -43,7 +43,7 @@ parser.add_argument('--image_size', default=256, type=int)
 ###############################################################################
 # Inference parameters
 ###############################################################################
-parser.add_argument('--experiment_name', default='WHU_KD_T_minus_S_cat@train@scale=1.0,1.25,1.5', type=str)
+parser.add_argument('--experiment_name', required=True, type=str)
 parser.add_argument('--domain', default='train', type=str)
 
 parser.add_argument('--crf_iteration', default=0, type=int)

@@ -60,7 +60,7 @@ parser.add_argument('--use_gn', default=True, type=str2bool)
 ###############################################################################
 
 
-parser.add_argument('--tag', default='WHU_weakly_change_detection', type=str)
+parser.add_argument('--tag', required=True, type=str)
 
 parser.add_argument('--domain', default='test', type=str)
 

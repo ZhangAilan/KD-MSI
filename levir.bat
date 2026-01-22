@@ -43,7 +43,7 @@ if %START_STEP% LEQ 3 (
 
 if %START_STEP% LEQ 4 (
     echo [Step 4] Train change detection model
-    python train_change_detection.py --data_dir %DATA_DIR% --tag LEVIR_weakly_change_detection --label_name LEVIR_KD_T_minus_S_cat@train@scale=0.5,1.0,1.25,2.0@crf=0@255
+    python train_change_detection.py --data_dir %DATA_DIR% --tag LEVIR_weakly_change_detection --label_name LEVIR_KD_T_minus_S_cat@train@scale=0.5,1.0,1.25,2.0@crf=0@255 --fully_supervised False
 )
 
 if %START_STEP% LEQ 5 (

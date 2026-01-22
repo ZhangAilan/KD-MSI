@@ -35,7 +35,7 @@ parser = argparse.ArgumentParser()
 ###############################################################################
 parser.add_argument('--seed', default=0, type=int)
 parser.add_argument('--num_workers', default=4, type=int)
-parser.add_argument('--data_dir', default='', type=str)
+parser.add_argument('--data_dir', required=True, type=str)
 
 ###############################################################################
 # Network
@@ -56,9 +56,9 @@ parser.add_argument('--wd', default=4e-5, type=float)
 parser.add_argument('--nesterov', default=True, type=str2bool)
 parser.add_argument('--image_size', default=256, type=int)
 parser.add_argument('--print_ratio', default=0.1, type=float)
-parser.add_argument('--tag', default='WHU_weakly_change_detection', type=str)
-parser.add_argument('--label_name', default='WHU_KD_T_minus_S_cat@train@scale=0.5,1.0,1.5,2.0_sigmoid@crf=0@255@threshold0.65@imageB', type=str)
-parser.add_argument('--fully_supervised', default=True, type=str2bool)
+parser.add_argument('--tag', required=True, type=str)
+parser.add_argument('--label_name', required=True, type=str)
+parser.add_argument('--fully_supervised', required=True, type=str2bool)
 
 
 if __name__ == '__main__':
@@ -101,10 +101,6 @@ if __name__ == '__main__':
                                              mask_folder=args.data_dir+'/label',
                                  list_file=args.data_dir+'/list/val_label.txt',
                                  img_size=args.image_size)
-
-    # from torch.utils.data import Subset
-    # train_dataset = Subset(train_dataset,range(10))
-    # valid_dataset = Subset(valid_dataset,range(10))
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=True, drop_last=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=False, drop_last=False)
