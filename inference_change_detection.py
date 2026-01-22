@@ -4,6 +4,7 @@
 
 import sys
 import copy
+import os
 
 import argparse
 import numpy as np
@@ -33,6 +34,8 @@ from tools.ai.torch_utils import *
 from tools.ai.evaluate_utils import *
 
 from tools.ai.augment_utils import *
+
+from accuray_metrics import calculate_metrics
 
 
 parser = argparse.ArgumentParser()
@@ -79,15 +82,15 @@ if __name__ == '__main__':
         args.tag += '@train'
     else:
         args.tag += '@' + args.domain
-    
+
     args.tag += '@scale=%s'%args.scales
     args.tag += '@iteration=%d'%args.iteration
 
     pred_dir = create_directory('./experiments/predictions/{}/'.format(args.tag))
-    
+
     set_seed(args.seed)
     log_func = lambda string='': print(string)
-    
+
     ###################################################################################
     # Transform, Dataset, DataLoader
     ###################################################################################
@@ -95,14 +98,14 @@ if __name__ == '__main__':
     imagenet_std = [0.5,0.5,0.5]#[0.229, 0.224, 0.225]
 
     normalize_fn = Normalize(imagenet_mean, imagenet_std)
-    
+
     # for mIoU
     # meta_dic = read_json('./data/VOC_2012.json')
 
     dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
                                  list_file=args.data_dir+f'/list/{args.domain}_label.txt',
                                  img_size=args.image_size,change_only= False)
-    
+
     ###################################################################################
     # Network
     ###################################################################################
@@ -112,7 +115,7 @@ if __name__ == '__main__':
         model = Seg_Model(args.backbone, num_classes=2)
     elif args.architecture == 'CSeg_Model':
         model = CSeg_Model(args.backbone, num_classes=2)
-    
+
     model = model.cuda()
     model.eval()
 
@@ -121,23 +124,23 @@ if __name__ == '__main__':
     log_func()
 
     load_model(model, model_path, parallel=False)
-    
+
     #################################################################################################
     # Evaluation
     #################################################################################################
     eval_timer = Timer()
     scales = [float(scale) for scale in args.scales.split(',')]
-    
+
     model.eval()
     eval_timer.tik()
 
     def inference(imagesA,imagesB, image_size):
         imagesA = imagesA
         imagesB = imagesB
-        
+
         logits = model(imagesA,imagesB)
         logits = resize_for_tensors(logits, image_size)
-        
+
         logits = logits[0] + logits[1].flip(-1)
 
         logits = logits.permute(1,2,0)
@@ -156,7 +159,7 @@ if __name__ == '__main__':
 
                 imageA = imageA.resize((round(ori_w*scale), round(ori_h*scale)), resample=PIL.Image.BICUBIC)
                 imageB = imageB.resize((round(ori_w*scale), round(ori_h*scale)), resample=PIL.Image.BICUBIC)
-                
+
                 imageA = normalize_fn(imageA)
                 imageB = normalize_fn(imageB)
 
@@ -169,18 +172,18 @@ if __name__ == '__main__':
 
                 flipped_imageA = imageA.flip(-1)
                 flipped_imageB = imageB.flip(-1)
-                
+
                 imagesA = torch.stack([imageA, flipped_imageA])
                 imagesB = torch.stack([imageB, flipped_imageB])
 
                 cams = inference(imagesA,imagesB, (ori_h, ori_w))
                 cams_list.append(cams)
-            
+
             preds = torch.stack(cams_list, axis=0)
             preds = torch.sum(preds,dim=0)
             preds = F.softmax(preds, dim=-1).cpu().numpy()
             # print(preds.shape)
-            
+
             if args.iteration > 0:
                 # h, w, c -> c, h, w
                 preds = crf_inference(np.asarray(ori_imageB), preds.transpose((2, 0, 1)), t=args.iteration)
@@ -190,10 +193,47 @@ if __name__ == '__main__':
 
             pred_mask = pred_mask*255
             imageio.imwrite(pred_dir + image_id + '.png', pred_mask.astype(np.uint8))
-            
+
             sys.stdout.write('\r# Make CAM [{}/{}] = {:.2f}%'.format(step + 1, length, (step + 1) / length * 100))
             sys.stdout.flush()
         print()
-    
-    if args.domain == 'val':
-        print("python3 evaluate.py --experiment_name {} --domain {} --mode png".format(args.tag, args.domain))
+
+        # Calculate overall accuracy after inference is complete
+        label_path = os.path.join(args.data_dir, 'label')
+        predict_path = pred_dir
+
+        print("Calculating accuracy metrics...")
+        metrics = calculate_metrics(label_path, predict_path)
+
+        # Print the metrics
+        print("=" * 50)
+        print("Accuracy Metrics Results:")
+        print("=" * 50)
+        print(f"Overall Accuracy:            {metrics['acc']:.4f}")
+        print(f"Class Average Accuracy:      {metrics['acc_cls']:.4f}")
+        print(f"IoU per class:               {metrics['iou']}")
+        print(f"Mean IoU:                    {metrics['miou']:.4f}")
+        print(f"Frequency Weighted Accuracy: {metrics['fwavacc']:.4f}")
+        print(f"Class Precision:             {metrics['class_accuracy']:.4f}")
+        print(f"Class Recall:                {metrics['class_recall']:.4f}")
+        print(f"Accuracy:                    {metrics['accuracy']:.4f}")
+        print(f"F1 Score:                    {metrics['f1_score']:.4f}")
+        print("=" * 50)
+
+        # Save metrics to a text file in the predictions directory with tag name
+        metrics_file_path = f'./experiments/predictions/{args.tag}_metrics.txt'
+        with open(metrics_file_path, 'w') as f:
+            f.write(f"Accuracy Metrics Results for {args.tag}:\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"Overall Accuracy:            {metrics['acc']:.4f}\n")
+            f.write(f"Class Average Accuracy:      {metrics['acc_cls']:.4f}\n")
+            f.write(f"IoU per class:               {metrics['iou']}\n")
+            f.write(f"Mean IoU:                    {metrics['miou']:.4f}\n")
+            f.write(f"Frequency Weighted Accuracy: {metrics['fwavacc']:.4f}\n")
+            f.write(f"Class Precision:             {metrics['class_accuracy']:.4f}\n")
+            f.write(f"Class Recall:                {metrics['class_recall']:.4f}\n")
+            f.write(f"Accuracy:                    {metrics['accuracy']:.4f}\n")
+            f.write(f"F1 Score:                    {metrics['f1_score']:.4f}\n")
+            f.write("=" * 50 + "\n")
+
+        print(f"Metrics saved to {metrics_file_path}")
