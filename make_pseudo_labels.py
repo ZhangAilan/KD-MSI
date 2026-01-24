@@ -171,6 +171,27 @@ if __name__ == '__main__':
             dst_path = os.path.join(final_pred_dir, filename)
             shutil.copy2(src_path, dst_path)
 
+    # Save best accuracy information to a txt file
+    output_filename = f"{args.experiment_name}@crf={args.crf_iteration}@255@threshold{best_threshold}.txt"
+    output_path = os.path.join('./experiments/results/', output_filename)
+
+    # Create results directory if it doesn't exist
+    os.makedirs('./experiments/results/', exist_ok=True)
+
+    # Calculate all metrics for the best threshold
+    best_metrics = calculate_metrics(label_path, best_predictions_dir)
+
+    # Write the results to the file
+    with open(output_path, 'w') as f:
+        f.write(f"Experiment: {args.experiment_name}\n")
+        f.write(f"CRF Iterations: {args.crf_iteration}\n")
+        f.write(f"Best Threshold: {best_threshold}\n")
+        f.write(f"Best F1 Score: {best_f1_score}\n")
+        for metric_name, metric_value in best_metrics.items():
+            f.write(f"{metric_name}: {metric_value}\n")
+
+    print(f"Results saved to {output_path}")
+
     # Clean up temporary directories
     import shutil
     tmp_dir = './tmp/predictions/'
