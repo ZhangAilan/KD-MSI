@@ -44,7 +44,7 @@ parser.add_argument('--image_size', default=256, type=int)
 # Inference parameters
 ###############################################################################
 parser.add_argument('--experiment_name', required=True, type=str)
-
+parser.add_argument('--domain', default='train', choices=['train', 'test'], type=str, help='Domain to process: train or test')
 parser.add_argument('--crf_iteration', default=0, type=int)
 
 
@@ -54,16 +54,16 @@ if __name__ == '__main__':
     ###################################################################################
     args = parser.parse_args()
 
-    cam_dir = f'./experiments/predictions/{args.experiment_name}_train_npy/'
+    cam_dir = f'./experiments/predictions/{args.experiment_name}_{args.domain}_npy/'
 
     set_seed(args.seed)
     log_func = lambda string='': print(string)
 
     ###################################################################################
-    # Process train dataset to find best threshold
+    # Process train or test dataset to find best threshold
     ###################################################################################
-    train_dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
-                                       list_file=args.data_dir+'/list/train_label.txt',
+    dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
+                                       list_file=args.data_dir+'/list/'+args.domain+'_label.txt',
                                        img_size=args.image_size,change_only= False)
 
     # Define thresholds to iterate over
@@ -81,14 +81,14 @@ if __name__ == '__main__':
         print(f"Evaluating threshold: {threshold}")
 
         # Create temporary directory for current threshold predictions
-        temp_pred_dir = create_directory(f'./tmp/predictions/{args.experiment_name}@threshold{threshold}/')
+        temp_pred_dir = create_directory(f'./tmp/predictions/{args.experiment_name}_{args.domain}@threshold{threshold}/')
 
         #################################################################################################
         # Generate pseudo labels for current threshold
         #################################################################################################
         with torch.no_grad():
-            length = len(train_dataset)
-            for step, (ori_imageA, ori_imageB, label, image_id) in enumerate(train_dataset):
+            length = len(dataset)
+            for step, (ori_imageA, ori_imageB, label, image_id) in enumerate(dataset):
                 png_path = temp_pred_dir + image_id + '.png'
                 if os.path.isfile(png_path):
                     continue
@@ -111,8 +111,6 @@ if __name__ == '__main__':
 
                 conf = keys[cams]*255
                 imageio.imwrite(png_path, conf.astype(np.uint8))
-
-
 
                 sys.stdout.write('\r# Make Pseudo Labels [{}/{}] = {:.2f}%, ({}, {})'.format(step + 1, length, (step + 1) / length * 100, (ori_h, ori_w), conf.shape))
                 sys.stdout.flush()
@@ -144,7 +142,7 @@ if __name__ == '__main__':
                 # Clean up remaining temporary directories that won't be used
                 for j in range(i+1, len(thresholds)):
                     remaining_threshold = thresholds[j]
-                    remaining_temp_dir = f'./tmp/predictions/{args.experiment_name}@threshold{remaining_threshold}/'
+                    remaining_temp_dir = f'./tmp/predictions/{args.experiment_name}_{args.domain}@threshold{remaining_threshold}/'
                     if os.path.exists(remaining_temp_dir):
                         import shutil
                         shutil.rmtree(remaining_temp_dir)
@@ -160,7 +158,7 @@ if __name__ == '__main__':
     print(f"\nBest threshold: {best_threshold} with F1 Score: {best_f1_score}")
 
     # Create final directory with best threshold and copy the best results there
-    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_train_pseudo_labels/')
+    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_{args.domain}_pseudo_labels/')
 
     # Copy the best predictions to the final directory
     import shutil
@@ -171,7 +169,7 @@ if __name__ == '__main__':
             shutil.copy2(src_path, dst_path)
 
     # Save best accuracy information to a txt file
-    output_filename = f"{args.experiment_name}_train_pseudo_labels@threshold{best_threshold}.txt"
+    output_filename = f"{args.experiment_name}_{args.domain}_pseudo_labels@threshold{best_threshold}.txt"
     output_path = os.path.join('./experiments/predictions/', output_filename)
 
     # Calculate all metrics for the best threshold
@@ -188,75 +186,6 @@ if __name__ == '__main__':
 
     print(f"Results saved to {output_path}")
 
-    ###################################################################################
-    # Process test dataset using the best threshold
-    ###################################################################################
-    test_dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
-                                      list_file=args.data_dir+'/list/test_label.txt',
-                                      img_size=args.image_size,change_only= False)
-
-    # Create directory for test predictions with @testoutput suffix
-    test_cam_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_npy/')
-    test_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_output_labels/')
-
-    print(f"Generating pseudo labels for test data using best threshold: {best_threshold}")
-
-    #################################################################################################
-    # Generate pseudo labels for test data using the best threshold
-    #################################################################################################
-    with torch.no_grad():
-        length = len(test_dataset)
-        for step, (ori_imageA, ori_imageB, label, image_id) in enumerate(test_dataset):
-            png_path = test_pred_dir + image_id + '.png'
-            if os.path.isfile(png_path):
-                continue
-
-            ori_w, ori_h = ori_imageB.size
-            predict_dict = np.load(test_cam_pred_dir + image_id + '.npy', allow_pickle=True).item()
-
-            keys = predict_dict['keys']
-
-            cams = predict_dict['hr_cam']
-            cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=best_threshold)
-
-            cams = np.argmax(cams, axis=0)
-            if keys.shape[0]>1:
-
-                if args.crf_iteration > 0:
-                    cams = crf_inference_label(np.asarray(ori_imageB), cams, n_labels=keys.shape[0], t=args.crf_iteration)
-            else:
-                pass
-
-            conf = keys[cams]*255
-            imageio.imwrite(png_path, conf.astype(np.uint8))
-
-            sys.stdout.write('\r# Make Pseudo Labels for Test [{}/{}] = {:.2f}%, ({}, {})'.format(step + 1, length, (step + 1) / length * 100, (ori_h, ori_w), conf.shape))
-            sys.stdout.flush()
-
-    # Calculate metrics for test data
-    test_label_path = os.path.join(args.data_dir, 'label')  # Assuming label folder is in data_dir
-    try:
-        test_metrics = calculate_metrics(test_label_path, test_pred_dir)
-        test_f1_score = test_metrics.get('f1_score', 0)
-        print(f"Test F1 Score with best threshold {best_threshold}: {test_f1_score}")
-
-        # Save test results to a txt file with @testoutput suffix
-        test_output_filename = f"{args.experiment_name}_test_output@threshold{best_threshold}.txt"
-        test_output_path = os.path.join('./experiments/predictions/', test_output_filename)
-
-        # Write the test results to the file
-        with open(test_output_path, 'w') as f:
-            f.write(f"Experiment: {args.experiment_name}\n")
-            f.write(f"CRF Iterations: {args.crf_iteration}\n")
-            f.write(f"Best Threshold (from train): {best_threshold}\n")
-            f.write(f"Test F1 Score: {test_f1_score}\n")
-            for metric_name, metric_value in test_metrics.items():
-                f.write(f"{metric_name}: {metric_value}\n")
-
-        print(f"Test results saved to {test_output_path}")
-    except Exception as e:
-        print(f"Error calculating test metrics: {str(e)}")
-
     # Clean up temporary directories
     import shutil
     tmp_dir = './tmp/predictions/'
@@ -264,4 +193,3 @@ if __name__ == '__main__':
         shutil.rmtree(tmp_dir)
 
     print(f"Final pseudo labels saved with best threshold {best_threshold}")
-    print(f"Test pseudo labels saved with @testoutput suffix")

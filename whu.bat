@@ -4,6 +4,7 @@ setlocal enabledelayedexpansion
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
 set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat
+set DOMAIN=train
 
 echo ==========================================
 echo Change Detection Pipeline Runner
@@ -31,13 +32,12 @@ if %START_STEP% LEQ 1 (
 
 if %START_STEP% LEQ 2 (
     echo [Step 2] Multi-scale sigmoid inference
-    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0 --domain train
-    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0 --domain test
+    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0 --domain %DOMAIN%
 )
 
 if %START_STEP% LEQ 3 (
     echo [Step 3] Generate pseudo labels
-    python make_pseudo_labels.py --data_dir %DATA_DIR% --experiment_name %EXPERIMENT_TAG%
+    python make_pseudo_labels.py --data_dir %DATA_DIR% --experiment_name %EXPERIMENT_TAG% --domain %DOMAIN%
 )
 
 echo.
