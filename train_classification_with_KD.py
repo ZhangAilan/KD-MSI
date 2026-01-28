@@ -252,7 +252,7 @@ if __name__ == '__main__':
     train_iterator = Iterator(train_loader)                                                          
 
     for iteration in range(max_iteration):
-        imageA, imageB, labels = train_iterator.get()
+        imageA, imageB, labels,_ = train_iterator.get()
         imageA, imageB, labels = imageA.cuda(), imageB.cuda(), labels.cuda()
 
         logits , features1= model(imageA,imageB)
