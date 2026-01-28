@@ -4,7 +4,6 @@ setlocal enabledelayedexpansion
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
 set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat
-set DOMAIN=train
 
 echo ==========================================
 echo Change Detection Pipeline Runner
@@ -16,6 +15,19 @@ echo ==========================================
 echo.
 
 set /p START_STEP=Please input start step (1-3):
+
+echo.
+echo Select domain:
+echo 0 - train
+echo 1 - test
+echo.
+set /p DOMAIN_CHOICE=Please input domain choice (0/1):
+
+if "%DOMAIN_CHOICE%"=="0" (
+    set DOMAIN=train
+) else (
+    set DOMAIN=test
+)
 
 if "%START_STEP%"=="" goto END
 if %START_STEP% GTR 3 goto END
