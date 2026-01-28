@@ -60,7 +60,7 @@ class WSCDDataSet(Dataset):
                 raw_sentences = [sentence.get('raw', '').strip() for sentence in sentence_objects]
                 self.sentences_map[filename] = raw_sentences
         else:
-            raise ValueError("jsonpath must be provided if list_file contains captions.")
+            print("Warning: jsonpath is None. No captions will be loaded.")
 
         self.img_size = img_size
         self.to_tensor = to_tensor
