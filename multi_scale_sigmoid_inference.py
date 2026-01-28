@@ -83,6 +83,7 @@ parser.add_argument('--student_combination', default='minus', type=str)
 ###############################################################################
 parser.add_argument('--tag', default='', type=str)
 parser.add_argument('--scales', default='0.5,1.0,1.25,2.0', type=str)
+parser.add_argument('--domain', default='train', choices=['train', 'test'], type=str, help='Domain to process: train or test')
 
 
 
@@ -94,7 +95,7 @@ if __name__ == '__main__':
     ###################################################################################
     args = parser.parse_args()
 
-    experiment_name = args.tag
+    experiment_name = args.tag + f'_{args.domain}'
 
     experiment_name += '_npy'
     
@@ -116,9 +117,15 @@ if __name__ == '__main__':
     imagenet_std = [0.5,0.5,0.5]
 
     normalize_fn = Normalize(imagenet_mean, imagenet_std)
-    dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
-                                 list_file=args.data_dir+'/list/train_label.txt',
-                                 img_size=args.image_size,change_only= False)
+    
+    if args.domain == 'train':
+        dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
+                                     list_file=args.data_dir+'/list/train_label.txt',
+                                     img_size=args.image_size,change_only= False)
+    else:
+        dataset = WSCDDataSet_with_ID(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
+                                     list_file=args.data_dir+'/list/test_label.txt',
+                                     img_size=args.image_size,change_only= False)
     ###################################################################################
     # Network
     ###################################################################################

@@ -31,7 +31,8 @@ if %START_STEP% LEQ 1 (
 
 if %START_STEP% LEQ 2 (
     echo [Step 2] Multi-scale sigmoid inference
-    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0
+    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0 --domain train
+    python multi_scale_sigmoid_inference.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --student_combination cat --scales 0.5,1.0,1.25,2.0 --domain test
 )
 
 if %START_STEP% LEQ 3 (

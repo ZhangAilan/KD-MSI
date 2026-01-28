@@ -54,7 +54,7 @@ if __name__ == '__main__':
     ###################################################################################
     args = parser.parse_args()
 
-    cam_dir = f'./experiments/predictions/{args.experiment_name}_npy/'
+    cam_dir = f'./experiments/predictions/{args.experiment_name}_train_npy/'
 
     set_seed(args.seed)
     log_func = lambda string='': print(string)
@@ -196,7 +196,8 @@ if __name__ == '__main__':
                                       img_size=args.image_size,change_only= False)
 
     # Create directory for test predictions with @testoutput suffix
-    test_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_output/')
+    test_cam_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_npy/')
+    test_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_output_labels/')
 
     print(f"Generating pseudo labels for test data using best threshold: {best_threshold}")
 
@@ -211,7 +212,7 @@ if __name__ == '__main__':
                 continue
 
             ori_w, ori_h = ori_imageB.size
-            predict_dict = np.load(cam_dir + image_id + '.npy', allow_pickle=True).item()
+            predict_dict = np.load(test_cam_pred_dir + image_id + '.npy', allow_pickle=True).item()
 
             keys = predict_dict['keys']
 
