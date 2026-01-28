@@ -103,7 +103,7 @@ if __name__ == '__main__':
     jsonfile=jsonfile[0]
     train_dataset = WSCDDataSet(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
                                  list_file=args.data_dir+'/list/train_label.txt',
-                                 img_size=args.image_size,jsonfile=jsonfile)
+                                 img_size=args.image_size,jsonpath=jsonfile)
 
     valid_dataset = WSCDDataSet_iou_evaluate(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
                                              mask_folder=args.data_dir+'/label',
