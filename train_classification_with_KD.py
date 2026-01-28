@@ -17,8 +17,8 @@ from tools.ai.log_utils import log_print, Average_Meter
 from tools.ai.optim_utils import PolyOptimizer
 from tools.ai.torch_utils import load_model, set_seed, make_cam, save_model, get_numpy_from_tensor,get_learning_rate_from_optimizer,accuracy
 from tools.ai.evaluate_utils import Calculator_For_mIoU
-
-
+from CLIP.clip import create_model
+from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
 
 
 def accuracy(pred, y):
@@ -61,6 +61,20 @@ parser.add_argument('--print_ratio', default=0.1, type=float)
 
 parser.add_argument('--tag', required=True, type=str)
 
+def custom_collate(batch):
+    # Separate the batch into components
+    pre_images, post_images, labels, sentences_list = zip(*batch)
+    
+    # Collate the images and labels normally
+    pre_images = default_collate(pre_images)
+    post_images = default_collate(post_images)
+    labels = default_collate(labels)
+    
+    # Keep sentences as a list of lists (each element is a list of sentences for an image)
+    # This prevents the default collate from transposing the sentences
+    
+    return pre_images, post_images, labels, sentences_list
+
 
 
 if __name__ == '__main__':
@@ -83,16 +97,18 @@ if __name__ == '__main__':
     log_func('[i] {}'.format(args.tag))
     log_func()
     
+    jsonfile=glob.glob(args.data_dir + '/*.json')
+    jsonfile=jsonfile[0]
     train_dataset = WSCDDataSet(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
                                  list_file=args.data_dir+'/list/train_label.txt',
-                                 img_size=args.image_size)
+                                 img_size=args.image_size,jsonfile=jsonfile)
 
     valid_dataset = WSCDDataSet_iou_evaluate(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
                                              mask_folder=args.data_dir+'/label',
-                                 list_file=args.data_dir+'/list/train_label.txt',
+                                 list_file=args.data_dir+'/list/val_label.txt',
                                  img_size=args.image_size)
     
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=True, drop_last=True,collate_fn=custom_collate)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=False, drop_last=False)
 
     val_iteration = len(train_loader)
