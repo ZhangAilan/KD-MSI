@@ -4,7 +4,6 @@ setlocal enabledelayedexpansion
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
 set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat
-set PREDICT_FOLDER=./experiments/predictions/%EXPERIMENT_TAG%@train@scale=0.5,1.0,1.25,2.0
 
 echo ==========================================
 echo Change Detection Pipeline Runner
@@ -37,7 +36,7 @@ if %START_STEP% LEQ 2 (
 
 if %START_STEP% LEQ 3 (
     echo [Step 3] Generate pseudo labels
-    python make_pseudo_labels.py --data_dir %DATA_DIR% --experiment_name %EXPERIMENT_TAG%@scale=0.5,1.0,1.25,2.0
+    python make_pseudo_labels.py --data_dir %DATA_DIR% --experiment_name %EXPERIMENT_TAG%
 )
 
 echo.

@@ -82,7 +82,6 @@ parser.add_argument('--student_combination', default='minus', type=str)
 # Inference parameters
 ###############################################################################
 parser.add_argument('--tag', default='', type=str)
-parser.add_argument('--domain', default='train', type=str)
 parser.add_argument('--scales', default='0.5,1.0,1.25,2.0', type=str)
 
 
@@ -97,12 +96,7 @@ if __name__ == '__main__':
 
     experiment_name = args.tag
 
-    if 'train' in args.domain:
-        experiment_name += '@train'
-    else:
-        experiment_name += '@val'
-
-    experiment_name += '@scale=%s'%args.scales
+    experiment_name += '_npy'
     
     pred_dir = create_directory(f'./experiments/predictions/{experiment_name}/')
 

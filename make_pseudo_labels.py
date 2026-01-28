@@ -54,7 +54,7 @@ if __name__ == '__main__':
     ###################################################################################
     args = parser.parse_args()
 
-    cam_dir = f'./experiments/predictions/{args.experiment_name}/'
+    cam_dir = f'./experiments/predictions/{args.experiment_name}_npy/'
 
     set_seed(args.seed)
     log_func = lambda string='': print(string)
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         print(f"Evaluating threshold: {threshold}")
 
         # Create temporary directory for current threshold predictions
-        temp_pred_dir = create_directory(f'./tmp/predictions/{args.experiment_name}@crf={args.crf_iteration}@255@threshold{threshold}/')
+        temp_pred_dir = create_directory(f'./tmp/predictions/{args.experiment_name}@threshold{threshold}/')
 
         #################################################################################################
         # Generate pseudo labels for current threshold
@@ -144,7 +144,7 @@ if __name__ == '__main__':
                 # Clean up remaining temporary directories that won't be used
                 for j in range(i+1, len(thresholds)):
                     remaining_threshold = thresholds[j]
-                    remaining_temp_dir = f'./tmp/predictions/{args.experiment_name}@crf={args.crf_iteration}@255@threshold{remaining_threshold}/'
+                    remaining_temp_dir = f'./tmp/predictions/{args.experiment_name}@threshold{remaining_threshold}/'
                     if os.path.exists(remaining_temp_dir):
                         import shutil
                         shutil.rmtree(remaining_temp_dir)
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     print(f"\nBest threshold: {best_threshold} with F1 Score: {best_f1_score}")
 
     # Create final directory with best threshold and copy the best results there
-    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}@crf={args.crf_iteration}@255/')
+    final_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_train_pseudo_labels/')
 
     # Copy the best predictions to the final directory
     import shutil
@@ -171,11 +171,8 @@ if __name__ == '__main__':
             shutil.copy2(src_path, dst_path)
 
     # Save best accuracy information to a txt file
-    output_filename = f"{args.experiment_name}@crf={args.crf_iteration}@255@threshold{best_threshold}.txt"
-    output_path = os.path.join('./experiments/results/', output_filename)
-
-    # Create results directory if it doesn't exist
-    os.makedirs('./experiments/results/', exist_ok=True)
+    output_filename = f"{args.experiment_name}_train_pseudo_labels@threshold{best_threshold}.txt"
+    output_path = os.path.join('./experiments/predictions/', output_filename)
 
     # Calculate all metrics for the best threshold
     best_metrics = calculate_metrics(label_path, best_predictions_dir)
@@ -199,7 +196,7 @@ if __name__ == '__main__':
                                       img_size=args.image_size,change_only= False)
 
     # Create directory for test predictions with @testoutput suffix
-    test_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}@crf={args.crf_iteration}@255@testoutput/')
+    test_pred_dir = create_directory(f'./experiments/predictions/{args.experiment_name}_test_output/')
 
     print(f"Generating pseudo labels for test data using best threshold: {best_threshold}")
 
@@ -243,8 +240,8 @@ if __name__ == '__main__':
         print(f"Test F1 Score with best threshold {best_threshold}: {test_f1_score}")
 
         # Save test results to a txt file with @testoutput suffix
-        test_output_filename = f"{args.experiment_name}@crf={args.crf_iteration}@255@threshold{best_threshold}@testoutput.txt"
-        test_output_path = os.path.join('./experiments/results/', test_output_filename)
+        test_output_filename = f"{args.experiment_name}_test_output@threshold{best_threshold}.txt"
+        test_output_path = os.path.join('./experiments/predictions/', test_output_filename)
 
         # Write the test results to the file
         with open(test_output_path, 'w') as f:
