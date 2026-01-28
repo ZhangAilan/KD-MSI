@@ -2,10 +2,11 @@ import os
 import torch
 from PIL import Image
 import numpy as np
-import pandas as pd
+import json
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 from core.data_utils_for_CAM_generation import CDDataAugmentation
+
 class Iterator:
     def __init__(self, loader):
         self.loader = loader
@@ -24,13 +25,14 @@ class Iterator:
         return data
 
 class WSCDDataSet(Dataset):
-    
-    def __init__(self, pre_img_folder=None, post_img_folder=None, list_file=None, 
-                 img_size=256,to_tensor=True):
+
+    def __init__(self, pre_img_folder=None, post_img_folder=None, list_file=None,
+                 img_size=256, to_tensor=True, jsonpath=None):
         
         self.pre_img_folder = pre_img_folder
         self.post_img_folder = post_img_folder
         self.list_file = list_file
+        self.jsonpath = jsonpath
         self.list_data = []
 
         with open(self.list_file, 'r') as file:
@@ -40,35 +42,53 @@ class WSCDDataSet(Dataset):
                 parts = line.strip().split(',')
 
                 filename = parts[0]
-                class_label = int(parts[-1])  # Assuming the class label is always the last element
+                class_label = int(parts[-1])
                 self.list_data.append((filename, class_label))
         self.length = len(self.list_data)
 
-        
+        # Load JSON data if jsonpath is provided
+        self.sentences_map = {}
+        if self.jsonpath:
+            with open(self.jsonpath, 'r') as f:
+                json_data = json.load(f)
+
+            # Create a mapping from filename to sentences (raw text only)
+            for img_info in json_data.get('images', []):
+                filename = img_info.get('filename')
+                sentence_objects = img_info.get('sentences', [])
+                # Extract only the 'raw' field from each sentence
+                raw_sentences = [sentence.get('raw', '').strip() for sentence in sentence_objects]
+                self.sentences_map[filename] = raw_sentences
+        else:
+            raise ValueError("jsonpath must be provided if list_file contains captions.")
+
         self.img_size = img_size
         self.to_tensor = to_tensor
-        
+
         self.augm = CDDataAugmentation(
             img_size=self.img_size
         )
         
     
     def __getitem__(self,idx):
-        # print(self.pre_img_folder)
-        # print(self.list_data)
         pre_img_path = os.path.join(self.pre_img_folder, self.list_data[idx][0])
         post_img_path = os.path.join(self.post_img_folder, self.list_data[idx][0])
-        
+
         pre_img = np.array(Image.open(pre_img_path).convert('RGB'))
         post_img = np.array(Image.open(post_img_path).convert('RGB'))
-        
-        
+
         [pre_img, post_img] = self.augm.transform(imgs=[pre_img, post_img], labels=None,to_tensor=self.to_tensor)
-        
+
         label = torch.tensor(self.list_data[idx][1]).unsqueeze(0).float()
-        # print(label.size())
-        
-        return pre_img, post_img, label
+
+        # Get sentences for the current image if jsonpath was provided
+        sentences = []
+        if self.jsonpath:
+            filename = self.list_data[idx][0]
+            sentences = self.sentences_map.get(filename, [])
+
+        # Always return 4 values to match the expected format
+        return pre_img, post_img, label, sentences
     
     def __len__(self):
         return self.length

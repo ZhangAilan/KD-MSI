@@ -1,11 +1,6 @@
-# Copyright (C) 2020 * Ltd. All rights reserved.
-# author : Sanghyeon Jo <josanghyeokn@gmail.com>
-
 import os
-import random
 import argparse
 
-import numpy as np
 
 def create_directory(path):
     if not os.path.isdir(path):

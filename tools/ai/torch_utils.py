@@ -5,8 +5,6 @@ import numpy as np
 
 import torch.nn.functional as F
 
-from torch.optim.lr_scheduler import LambdaLR
-
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -63,3 +61,8 @@ def get_learning_rate(optimizer):
     for param_group in optimizer.param_groups:
        lr +=[ param_group['lr'] ]
     return lr
+
+def accuracy(pred, y):
+    correct = sum(row.all().int().item() for row in (pred.ge(0) == y))
+    n = y.shape[0]
+    return correct / n

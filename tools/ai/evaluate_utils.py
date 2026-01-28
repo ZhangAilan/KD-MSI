@@ -1,10 +1,5 @@
 import numpy as np
 
-
-
-
-
-
 class Calculator_For_mIoU:
     def __init__(self):
 

@@ -1,16 +1,11 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 import torch.utils.model_zoo as model_zoo
 
 from .arch_resnet import resnet
 from .abc_modules import ABC_Model
-
 from .deeplab_utils import ASPP, Decoder
-
-
 from tools.ai.torch_utils import resize_for_tensors
 
 #######################################################################

@@ -1,2 +1,7 @@
 tmp/
 Data/
+__pycache__/
+**/__pycache__/
+ViT-L-14-336px.pt
+experiments/
+dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
