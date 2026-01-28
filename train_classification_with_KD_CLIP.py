@@ -208,7 +208,7 @@ if __name__ == '__main__':
         {'params': param_groups2[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
         {'params': param_groups2[3], 'lr': 20*args.lr, 'weight_decay': 0},
 
-        {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
+        # {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
 
     ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
     
