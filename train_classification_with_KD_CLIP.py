@@ -97,7 +97,7 @@ if __name__ == '__main__':
         pre_img_folder=args.data_dir + '/A',
         post_img_folder=args.data_dir + '/B',
         mask_folder=args.data_dir + '/label',
-        list_file=args.data_dir + '/list/train_label.txt',
+        list_file=args.data_dir + '/list/val_label.txt',
         img_size=args.image_size
     )
 
@@ -343,14 +343,15 @@ if __name__ == '__main__':
 
         cam = make_cam(features1) * labels.unsqueeze(2).unsqueeze(3)
         cam1 = cam.clone().detach()   #teacher cam
-        cam1=cam1*cross_modal_features
         cam2 = F.sigmoid(features2)
         # print(cam2.shape) #[8, 1, 16, 16]
+
+        loss_cross=nn.MSELoss()(cam2, cross_modal_features)
 
         loss_kd = nn.MSELoss()(cam2, cam1)
         class_loss = class_loss_fn(logits, labels).mean()
         acc1 = accuracy(logits, labels)
-        loss = class_loss + 10 * loss_kd
+        loss = class_loss + 10 * loss_kd + 10 * loss_cross
 
         optimizer.zero_grad()
         loss.backward()
