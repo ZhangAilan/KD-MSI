@@ -155,10 +155,6 @@ if __name__ == '__main__':
     # 强制使用单显卡，如果有 GPU 则用 cuda:0，否则用 cpu
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-    # # Load models
-    # dino_model = load_dinov3_model(device,'dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth')
-    # clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
     
     ###################################################################################
     # Network
@@ -179,6 +175,10 @@ if __name__ == '__main__':
     save_model_fn = lambda: save_model(model2, model_path, parallel=False)
 
     print("Single-GPU environment setup complete.")
+
+    # Load models
+    dino_model = load_dinov3_model(device,'dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth')
+    clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
 
     #DINO CLIP Adaptor
     # projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()

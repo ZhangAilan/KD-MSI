@@ -32,9 +32,7 @@ REM ===============================
 REM 3. 执行 whu.bat
 REM ===============================
 echo [INFO] Running whu.bat...
-call whu.bat 
-1 
-0
+call whu.bat 1 0
 
 echo [INFO] All tasks completed.
 pause
