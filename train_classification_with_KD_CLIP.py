@@ -202,7 +202,7 @@ if __name__ == '__main__':
         {'params': param_groups2[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
         {'params': param_groups2[3], 'lr': 20*args.lr, 'weight_decay': 0},
 
-        # {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
+        {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
 
     ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
     
@@ -345,15 +345,17 @@ if __name__ == '__main__':
         logits2 ,features2 = model2(imageA,imageB)
 
         cam = make_cam(features1)*labels.unsqueeze(2).unsqueeze(3)
-        cam1 = cam.clone().detach()
+        cam1 = cam.clone().detach()  #教师cam
+        cam2 = F.sigmoid(features2)  #学生cam
 
-
-        cam2 = F.sigmoid(features2)
-
+        loss_cross = nn.MSELoss()(cam2, cross_modal_features)
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
+
         acc1= accuracy(logits, labels)
-        loss = class_loss + 10*loss_kd
+
+        #加上跨模态损失
+        loss = class_loss + 10*loss_kd + loss_cross
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
