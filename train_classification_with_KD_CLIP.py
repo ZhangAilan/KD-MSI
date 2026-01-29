@@ -126,31 +126,31 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # -------- 2. CLIP 加载 --------
-    CLIP_MODEL = create_model(
-        model_name="ViT-L-14-336",
-        img_size=512,
-        device=device,
-        pretrained="openai",
-        require_pretrained=True,
-        ckpt_path='ViT-L-14-336px.pt',
-    )
-    CLIP_MODEL.to(device).eval()
-    print("CLIP model loaded.")
+    # # -------- 2. CLIP 加载 --------
+    # CLIP_MODEL = create_model(
+    #     model_name="ViT-L-14-336",
+    #     img_size=512,
+    #     device=device,
+    #     pretrained="openai",
+    #     require_pretrained=True,
+    #     ckpt_path='ViT-L-14-336px.pt',
+    # )
+    # CLIP_MODEL.to(device).eval()
+    # print("CLIP model loaded.")
 
-    # -------- 3. DINOv3 加载 --------
-    repo_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "dinov3"
-    )
-    DINO_MODEL = torch.hub.load(
-        repo_dir,
-        "dinov3_vitl16",
-        source="local",
-        weights='dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth',
-    )
-    DINO_MODEL.to(device).eval()
-    print("DINOv3 model loaded.")
+    # # -------- 3. DINOv3 加载 --------
+    # repo_dir = os.path.join(
+    #     os.path.dirname(os.path.abspath(__file__)),
+    #     "dinov3"
+    # )
+    # DINO_MODEL = torch.hub.load(
+    #     repo_dir,
+    #     "dinov3_vitl16",
+    #     source="local",
+    #     weights='dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth',
+    # )
+    # DINO_MODEL.to(device).eval()
+    # print("DINOv3 model loaded.")
     
     ###################################################################################
     # Network
