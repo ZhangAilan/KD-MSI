@@ -133,7 +133,7 @@ if __name__ == '__main__':
     )
     CLIP_MODEL.to(device).eval()
     print("CLIP model loaded.")
-    no_change_text_feature = encode_text_for_change_detection(CLIP_MODEL, device)
+    # no_change_text_feature = encode_text_for_change_detection(CLIP_MODEL, device)
 
     # -------- DINOv3 --------
     repo_dir = os.path.join(
