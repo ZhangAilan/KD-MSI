@@ -121,8 +121,12 @@ if __name__ == '__main__':
     log_func('[i] val_iteration : {:,}'.format(val_iteration))
     log_func('[i] max_iteration : {:,}'.format(max_iteration))
 
-    # -------- CLIP --------
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # -------- 1. 设备统一设置 --------
+    # 强制使用单显卡，如果有 GPU 则用 cuda:0，否则用 cpu
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    # -------- 2. CLIP 加载 --------
     CLIP_MODEL = create_model(
         model_name="ViT-L-14-336",
         img_size=512,
@@ -133,9 +137,8 @@ if __name__ == '__main__':
     )
     CLIP_MODEL.to(device).eval()
     print("CLIP model loaded.")
-    # no_change_text_feature = encode_text_for_change_detection(CLIP_MODEL, device)
 
-    # -------- DINOv3 --------
+    # -------- 3. DINOv3 加载 --------
     repo_dir = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "dinov3"
@@ -161,28 +164,18 @@ if __name__ == '__main__':
     param_groups = model.get_parameter_groups(print_fn=None)
     param_groups2 = model2.get_parameter_groups(print_fn=None)
     
-    model = model.cuda()
-    model.train()
-
-    model2 = model2.cuda()
-    model2.train()
+    # 统一移动到设备并设为训练模式
+    model.to(device).train()
+    model2.to(device).train()
 
     log_func('[i] Architecture is {}'.format(args.architecture))
-    log_func()
 
-    try:
-        use_gpu = os.environ['CUDA_VISIBLE_DEVICES']
-    except KeyError:
-        use_gpu = '0'
+    # -------- 5. 简化后的保存/加载函数 --------
+    # 移除了所有 parallel 判断和 nn.DataParallel 包装
+    load_model_fn = lambda: load_model(model2, model_path, parallel=False)
+    save_model_fn = lambda: save_model(model2, model_path, parallel=False)
 
-    the_number_of_gpu = len(use_gpu.split(','))
-    if the_number_of_gpu > 1:
-        log_func('[i] the number of gpu : {}'.format(the_number_of_gpu))
-        model = nn.DataParallel(model)
-        model2 = nn.DataParallel(model2)
-
-    load_model_fn = lambda: load_model(model2, model_path, parallel=the_number_of_gpu > 1)
-    save_model_fn = lambda: save_model(model2, model_path, parallel=the_number_of_gpu > 1)
+    print("Single-GPU environment setup complete.")
 
     #DINO CLIP Adaptor
     # projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
