@@ -291,7 +291,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(tensorboard_dir)
     train_iterator = Iterator(train_loader)                                                          
 
-    no_text_change_feature = encode_text_for_change_detection(clip_model=clip_model, device=device)
+    no_change_text_feature = encode_text_for_change_detection(clip_model=clip_model, device=device)
     for iteration in range(max_iteration):
         imageA, imageB, labels,sentences = train_iterator.get()
         imageA, imageB, labels = imageA.cuda(), imageB.cuda(), labels.cuda()
