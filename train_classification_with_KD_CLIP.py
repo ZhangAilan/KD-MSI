@@ -23,14 +23,6 @@ from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
 
 
-def accuracy(pred, y):
-    
-    correct = sum(row.all().int().item() for row in (pred.ge(0) == y))
-    n = y.shape[0]
-    return correct / n
-
-
-
 parser = argparse.ArgumentParser()
 
 ###############################################################################
@@ -63,20 +55,59 @@ parser.add_argument('--print_ratio', default=0.1, type=float)
 
 parser.add_argument('--tag', required=True, type=str)
 
+def accuracy(pred, y):
+    
+    correct = sum(row.all().int().item() for row in (pred.ge(0) == y))
+    n = y.shape[0]
+    return correct / n
+
 def custom_collate(batch):
     # Separate the batch into components
     pre_images, post_images, labels, sentences_list = zip(*batch)
-    
+
     # Collate the images and labels normally
     pre_images = default_collate(pre_images)
     post_images = default_collate(post_images)
     labels = default_collate(labels)
-    
+
     # Keep sentences as a list of lists (each element is a list of sentences for an image)
     # This prevents the default collate from transposing the sentences
-    
+
     return pre_images, post_images, labels, sentences_list
 
+
+def load_clip_model(device,ckpt_path):
+    """Load the CLIP model."""
+    # -------- 2. CLIP 加载 --------
+    clip_model = create_model(
+        model_name="ViT-L-14-336",
+        img_size=512,
+        device=device,
+        pretrained="openai",
+        require_pretrained=True,
+        ckpt_path=ckpt_path,
+    )
+    clip_model.to(device).eval()
+    print("CLIP model loaded.")
+    return clip_model
+
+
+def load_dinov3_model(device,ckpt_path):
+    """Load the DINOv3 model."""
+    # -------- 3. DINOv3 加载 --------
+    repo_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "dinov3"
+    )
+    dinov3_model = torch.hub.load(
+        repo_dir,
+        "dinov3_vitl16",
+        source="local",
+        weights=ckpt_path,
+    )
+    dinov3_model.to(device).eval()
+    print("DINOv3 model loaded.")
+    return dinov3_model
 
 
 if __name__ == '__main__':
@@ -84,21 +115,21 @@ if __name__ == '__main__':
     # Arguments
     ###################################################################################
     args = parser.parse_args()
-    
+
     log_dir = create_directory(f'./experiments/logs/')
     data_dir = create_directory(f'./experiments/data/')
     model_dir = create_directory('./experiments/models/')
     tensorboard_dir = create_directory(f'./experiments/tensorboards/{args.tag}/')
-    
+
     log_path = log_dir + f'{args.tag}.txt'
     model_path = model_dir + f'{args.tag}.pth'
 
     set_seed(args.seed)
     log_func = lambda string='': log_print(string, log_path)
-    
+
     log_func('[i] {}'.format(args.tag))
     log_func()
-    
+
     jsonfile=glob.glob(args.data_dir + '/*.json')
     jsonfile=jsonfile[0]
     train_dataset = WSCDDataSet(pre_img_folder=args.data_dir+'/A', post_img_folder=args.data_dir+'/B',
@@ -109,7 +140,7 @@ if __name__ == '__main__':
                                              mask_folder=args.data_dir+'/label',
                                  list_file=args.data_dir+'/list/val_label.txt',
                                  img_size=args.image_size)
-    
+
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=True, drop_last=True,collate_fn=custom_collate)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=False, drop_last=False)
 
@@ -121,42 +152,17 @@ if __name__ == '__main__':
     log_func('[i] val_iteration : {:,}'.format(val_iteration))
     log_func('[i] max_iteration : {:,}'.format(max_iteration))
 
-    # -------- 1. 设备统一设置 --------
     # 强制使用单显卡，如果有 GPU 则用 cuda:0，否则用 cpu
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # # -------- 2. CLIP 加载 --------
-    # CLIP_MODEL = create_model(
-    #     model_name="ViT-L-14-336",
-    #     img_size=512,
-    #     device=device,
-    #     pretrained="openai",
-    #     require_pretrained=True,
-    #     ckpt_path='ViT-L-14-336px.pt',
-    # )
-    # CLIP_MODEL.to(device).eval()
-    # print("CLIP model loaded.")
-
-    # # -------- 3. DINOv3 加载 --------
-    # repo_dir = os.path.join(
-    #     os.path.dirname(os.path.abspath(__file__)),
-    #     "dinov3"
-    # )
-    # DINO_MODEL = torch.hub.load(
-    #     repo_dir,
-    #     "dinov3_vitl16",
-    #     source="local",
-    #     weights='dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth',
-    # )
-    # DINO_MODEL.to(device).eval()
-    # print("DINOv3 model loaded.")
+    # # Load models
+    # dino_model = load_dinov3_model(device,'dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth')
+    # clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
     
     ###################################################################################
     # Network
     ###################################################################################
-
-    
     model = Classifier_Siamese(args.architecture, 1, args.mode, args.teacher)
     model2 = Classifier_Siamese(args.architecture, 1, args.mode, args.student)
 
@@ -169,9 +175,6 @@ if __name__ == '__main__':
     model2.to(device).train()
 
     log_func('[i] Architecture is {}'.format(args.architecture))
-
-    # -------- 5. 简化后的保存/加载函数 --------
-    # 移除了所有 parallel 判断和 nn.DataParallel 包装
     load_model_fn = lambda: load_model(model2, model_path, parallel=False)
     save_model_fn = lambda: save_model(model2, model_path, parallel=False)
 
