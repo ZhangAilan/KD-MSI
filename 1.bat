@@ -21,8 +21,8 @@ echo [INFO] Running git pull...
 git pull
 
 IF ERRORLEVEL 1 (
-    echo [WARN] git pull failed. Retrying in 5 seconds...
-    timeout /t 5 >nul
+    echo [WARN] git pull failed. Retrying in 2 seconds...
+    timeout /t 2 >nul
     goto git_pull_loop
 )
 
@@ -32,7 +32,7 @@ REM ===============================
 REM 3. 执行 whu.bat
 REM ===============================
 echo [INFO] Running whu.bat...
-call whu.bat 1 0
+call whu.bat
 
 echo [INFO] All tasks completed.
 pause
