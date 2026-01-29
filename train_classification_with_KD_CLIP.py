@@ -121,33 +121,33 @@ if __name__ == '__main__':
     log_func('[i] val_iteration : {:,}'.format(val_iteration))
     log_func('[i] max_iteration : {:,}'.format(max_iteration))
 
-    # -------- CLIP --------
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    CLIP_MODEL = create_model(
-        model_name="ViT-L-14-336",
-        img_size=512,
-        device=device,
-        pretrained="openai",
-        require_pretrained=True,
-        ckpt_path='ViT-L-14-336px.pt',
-    )
-    CLIP_MODEL.to(device).eval()
-    print("CLIP model loaded.")
-    no_change_text_feature = encode_text_for_change_detection(CLIP_MODEL, device)
+    # # -------- CLIP --------
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    # CLIP_MODEL = create_model(
+    #     model_name="ViT-L-14-336",
+    #     img_size=512,
+    #     device=device,
+    #     pretrained="openai",
+    #     require_pretrained=True,
+    #     ckpt_path='ViT-L-14-336px.pt',
+    # )
+    # CLIP_MODEL.to(device).eval()
+    # print("CLIP model loaded.")
+    # no_change_text_feature = encode_text_for_change_detection(CLIP_MODEL, device)
 
-    # -------- DINOv3 --------
-    repo_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "dinov3"
-    )
-    DINO_MODEL = torch.hub.load(
-        repo_dir,
-        "dinov3_vitl16",
-        source="local",
-        weights='dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth',
-    )
-    DINO_MODEL.to(device).eval()
-    print("DINOv3 model loaded.")
+    # # -------- DINOv3 --------
+    # repo_dir = os.path.join(
+    #     os.path.dirname(os.path.abspath(__file__)),
+    #     "dinov3"
+    # )
+    # DINO_MODEL = torch.hub.load(
+    #     repo_dir,
+    #     "dinov3_vitl16",
+    #     source="local",
+    #     weights='dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth',
+    # )
+    # DINO_MODEL.to(device).eval()
+    # print("DINOv3 model loaded.")
     
     ###################################################################################
     # Network
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     save_model_fn = lambda: save_model(model2, model_path, parallel=the_number_of_gpu > 1)
 
     #DINO CLIP Adaptor
-    projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
+    # projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
     
     ###################################################################################
     # Loss, Optimizer
@@ -304,47 +304,47 @@ if __name__ == '__main__':
         # print(labels.shape)    #[8, 1]
         # print(len(sentences))  #[8]
 
-        #文字特征
-        text_features = torch.zeros(len(sentences), 768, 2).to(device)
-        with torch.no_grad():
-            for i in range(len(sentences)):
-                #text branch
-                if labels[i]==0: #此时未发生变化
-                    text_features[i] = no_change_text_feature
-                else: #此时发生变化
-                    text_features[i] = encode_text_for_change_detection(CLIP_MODEL, device, batch_change_sentences=sentences[i])     
-        # print(text_features.shape) #[8, 768, 2]
+        # #文字特征
+        # text_features = torch.zeros(len(sentences), 768, 2).to(device)
+        # with torch.no_grad():
+        #     for i in range(len(sentences)):
+        #         #text branch
+        #         if labels[i]==0: #此时未发生变化
+        #             text_features[i] = no_change_text_feature
+        #         else: #此时发生变化
+        #             text_features[i] = encode_text_for_change_detection(CLIP_MODEL, device, batch_change_sentences=sentences[i])     
+        # # print(text_features.shape) #[8, 768, 2]
 
-        #视觉特征
-        _,patch_tokens_A=get_feature_dinov3(imageA, device, DINO_MODEL)
-        _,patch_tokens_B=get_feature_dinov3(imageB, device, DINO_MODEL)
-        # print(patch_tokens_A[0].shape) #[8, 256, 1024]
+        # #视觉特征
+        # _,patch_tokens_A=get_feature_dinov3(imageA, device, DINO_MODEL)
+        # _,patch_tokens_B=get_feature_dinov3(imageB, device, DINO_MODEL)
+        # # print(patch_tokens_A[0].shape) #[8, 256, 1024]
 
-        #文字与视觉特征适配
-        cross_modal_features_list=[]
-        for i in range(4):
-            pathch_features_A=projector_dino_clip(patch_tokens_A[i])
-            pathch_features_B=projector_dino_clip(patch_tokens_B[i])
-            patch_features=torch.abs(torch.sub(pathch_features_A, pathch_features_B))
-            #归一化
-            eps=1e-6
-            patch_features=patch_features/(patch_features.norm(dim=-1, keepdim=True)+eps)
-            # print(patch_features.shape) #[8, 256, 768]
-            #跨模态
-            LOGITS_SCALE=100.0
-            cross_modal_features=LOGITS_SCALE*patch_features@text_features
-            # print(cross_modal_features.shape) #[8, 256, 2]
-            #2D门控图
-            B,N,C=cross_modal_features.shape
-            H,W=int(np.sqrt(N)),int(np.sqrt(N))
-            cross_modal_features = cross_modal_features.view(B, H, W, C)
-            cross_modal_features = cross_modal_features.permute(0, 3, 1, 2)
-            # print(cross_modal_features.shape) #[8, 2, 16, 16]
-            cross_modal_features = torch.softmax(cross_modal_features, dim=1)
-            cross_modal_features_list.append(cross_modal_features)
-        cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0)
-        cross_modal_features = cross_modal_features[:,1:2,:,:]  #获取第二个维度
-        # print(cross_modal_features.shape) #[8, 1, 16, 16]
+        # #文字与视觉特征适配
+        # cross_modal_features_list=[]
+        # for i in range(4):
+        #     pathch_features_A=projector_dino_clip(patch_tokens_A[i])
+        #     pathch_features_B=projector_dino_clip(patch_tokens_B[i])
+        #     patch_features=torch.abs(torch.sub(pathch_features_A, pathch_features_B))
+        #     #归一化
+        #     eps=1e-6
+        #     patch_features=patch_features/(patch_features.norm(dim=-1, keepdim=True)+eps)
+        #     # print(patch_features.shape) #[8, 256, 768]
+        #     #跨模态
+        #     LOGITS_SCALE=100.0
+        #     cross_modal_features=LOGITS_SCALE*patch_features@text_features
+        #     # print(cross_modal_features.shape) #[8, 256, 2]
+        #     #2D门控图
+        #     B,N,C=cross_modal_features.shape
+        #     H,W=int(np.sqrt(N)),int(np.sqrt(N))
+        #     cross_modal_features = cross_modal_features.view(B, H, W, C)
+        #     cross_modal_features = cross_modal_features.permute(0, 3, 1, 2)
+        #     # print(cross_modal_features.shape) #[8, 2, 16, 16]
+        #     cross_modal_features = torch.softmax(cross_modal_features, dim=1)
+        #     cross_modal_features_list.append(cross_modal_features)
+        # cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0)
+        # cross_modal_features = cross_modal_features[:,1:2,:,:]  #获取第二个维度
+        # # print(cross_modal_features.shape) #[8, 1, 16, 16]
 
         logits , features1= model(imageA,imageB)
         logits2 ,features2 = model2(imageA,imageB)
