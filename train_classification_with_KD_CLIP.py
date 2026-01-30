@@ -345,7 +345,7 @@ if __name__ == '__main__':
         #     loss_focal(cross_modal_features,cam2) +
         #     loss_dice(cross_modal_features[:, 1, :, :],cam2)
         # )
-        loss_cross=nn.MSELoss()(cam2,cross_modal_features[:, 1:2, :, :])
+        # loss_cross=nn.MSELoss()(cam2,cross_modal_features[:, 1:2, :, :])
         loss_cross=loss_focal(cross_modal_features,cam2)
 
         acc1= accuracy(logits, labels)
