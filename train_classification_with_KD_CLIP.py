@@ -22,7 +22,7 @@ from tools.ai.evaluate_utils import Calculator_For_mIoU
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
 from core.adapter import DinoToClipProjector
-
+from core.loss import FocalLoss, BinaryDiceLoss
 
 parser = argparse.ArgumentParser()
 
@@ -187,6 +187,8 @@ if __name__ == '__main__':
     # Loss, Optimizer
     ###################################################################################
     class_loss_fn = nn.BCEWithLogitsLoss().cuda()
+    loss_focal=FocalLoss()
+    loss_dice=BinaryDiceLoss()
 
     log_func('[i] The number of pretrained weights : {}'.format(len(param_groups[0])))
     log_func('[i] The number of pretrained bias : {}'.format(len(param_groups[1])))
@@ -321,20 +323,28 @@ if __name__ == '__main__':
             # print(cross_modal_features.shape) #[8, 2, 16, 16]
             cross_modal_features = torch.softmax(cross_modal_features, dim=1)
             cross_modal_features_list.append(cross_modal_features)
-        cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0)
-        cross_modal_features = cross_modal_features[:,1:2,:,:]  #获取第二个维度
+        cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0) # [8, 2, 16, 16]
+        # print(cross_modal_features.shape) [8, 2, 16, 16]
+        # cross_modal_features = cross_modal_features[:,1:2,:,:]  #获取第二个维度
         # print(cross_modal_features.shape) #[8, 1, 16, 16]
 
+        #生成CAM
         logits , features1= model(imageA,imageB)
         logits2 ,features2 = model2(imageA,imageB)
 
         cam = make_cam(features1)*labels.unsqueeze(2).unsqueeze(3)
         cam1 = cam.clone().detach()  #教师cam
-        cam2 = F.sigmoid(features2)  #学生cam
+        cam2 = F.sigmoid(features2)  #学生cam 
+        # print(cam2.shape) #[8, 1, 16, 16]
 
-        loss_cross = nn.MSELoss()(cam2, cross_modal_features)
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
+
+        #计算跨模态损失
+        loss_cross = (
+            loss_focal(cross_modal_features,cam2) +
+            loss_dice(cross_modal_features[:, 1, :, :],cam2)
+        )
 
         acc1= accuracy(logits, labels)
 

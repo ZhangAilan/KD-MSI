@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
-set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat_CLIP_MSE10_nolinear
+set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat_CLIP_MSE10_nolinear_FocalDice
 
 echo ==========================================
 echo Change Detection Pipeline Runner
@@ -39,7 +39,7 @@ echo.
 
 if %START_STEP% LEQ 1 (
     echo [Step 1] Train classification with KD
-    python train_classification_with_KD_CLIP.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --teacher minus --student cat
+    python train_classification_with_KD_CLIP.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --teacher minus --student cat --batch_size 64
 )
 
 if %START_STEP% LEQ 2 (
