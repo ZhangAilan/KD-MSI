@@ -39,7 +39,7 @@ echo.
 
 if %START_STEP% LEQ 1 (
     echo [Step 1] Train classification with KD
-    python train_classification_with_KD_CLIP.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --teacher minus --student cat --batch_size 16
+    python train_classification_with_KD_CLIP.py --data_dir %DATA_DIR% --tag %EXPERIMENT_TAG% --teacher minus --student cat --batch_size 8
 )
 
 if %START_STEP% LEQ 2 (
