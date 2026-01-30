@@ -348,7 +348,9 @@ if __name__ == '__main__':
         cam1 = cam.clone().detach()  #教师cam
         cam2 = F.sigmoid(features2)  #学生cam
 
-        loss_cross = nn.MSELoss()(cam2, cross_modal_features)
+        cam1=cam1*cross_modal_features  #门控
+
+        # loss_cross = nn.MSELoss()(cam2, cross_modal_features)
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
 
