@@ -357,7 +357,7 @@ if __name__ == '__main__':
         acc1= accuracy(logits, labels)
 
         #加上跨模态损失
-        loss = class_loss + 10*loss_kd + 15*loss_cross
+        loss = class_loss + 10*loss_kd
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
