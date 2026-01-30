@@ -341,10 +341,12 @@ if __name__ == '__main__':
         class_loss = class_loss_fn(logits, labels).mean()
 
         #计算跨模态损失
-        loss_cross = (
-            loss_focal(cross_modal_features,cam2) +
-            loss_dice(cross_modal_features[:, 1, :, :],cam2)
-        )
+        # loss_cross = (
+        #     loss_focal(cross_modal_features,cam2) +
+        #     loss_dice(cross_modal_features[:, 1, :, :],cam2)
+        # )
+        loss_cross=nn.MSELoss()(cam2,cross_modal_features[:, 1:2, :, :])
+        loss_cross=loss_focal(cross_modal_features,cam2)
 
         acc1= accuracy(logits, labels)
 
