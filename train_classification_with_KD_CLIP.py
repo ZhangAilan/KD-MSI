@@ -18,7 +18,7 @@ from tools.general.time_utils import Timer
 from tools.ai.log_utils import log_print, Average_Meter
 from tools.ai.optim_utils import PolyOptimizer
 from tools.ai.torch_utils import load_model, set_seed, make_cam, save_model, get_numpy_from_tensor,get_learning_rate_from_optimizer,accuracy
-from tools.ai.evaluate_utils import Calculator_For_mIoU
+from tools.ai.evaluate_utils import Calculator_For_mIoU, Calculator_For_F1
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
 from core.adapter import DinoToClipProjector
@@ -57,7 +57,6 @@ parser.add_argument('--print_ratio', default=0.1, type=float)
 parser.add_argument('--tag', required=True, type=str)
 
 def accuracy(pred, y):
-    
     correct = sum(row.all().int().item() for row in (pred.ge(0) == y))
     n = y.shape[0]
     return correct / n
@@ -118,7 +117,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     log_dir = create_directory(f'./experiments/logs/')
-    data_dir = create_directory(f'./experiments/data/')
     model_dir = create_directory('./experiments/models/')
     tensorboard_dir = create_directory(f'./experiments/tensorboards/{args.tag}/')
 
@@ -162,7 +160,6 @@ if __name__ == '__main__':
     ###################################################################################
     model = Classifier_Siamese(args.architecture, 1, args.mode, args.teacher)
     model2 = Classifier_Siamese(args.architecture, 1, args.mode, args.student)
-
     
     param_groups = model.get_parameter_groups(print_fn=None)
     param_groups2 = model2.get_parameter_groups(print_fn=None)
@@ -220,10 +217,10 @@ if __name__ == '__main__':
     train_timer = Timer()
     eval_timer = Timer()
 
-    train_meter = Average_Meter(['loss', 'class_loss','accuracy'])
+    train_meter = Average_Meter(['loss', 'class_loss', 'loss_cross', 'accuracy'])
 
     best_acc1 = -1
-    best_train_mIoU = -1
+    best_f1 = -1
     thresholds = list(np.arange(0.10, 1, 0.05))
     
     def evaluate(loader):
@@ -232,6 +229,7 @@ if __name__ == '__main__':
 
         valid_meter = Average_Meter(['val_loss','val_acc'])
         meter_dic = {th : Calculator_For_mIoU() for th in thresholds}
+        f1_meter_dic = {th : Calculator_For_F1() for th in thresholds}
 
         with torch.no_grad():
             length = len(loader)
@@ -258,20 +256,24 @@ if __name__ == '__main__':
                             bg = np.ones_like(cam[:, :, 0]) * th
                             pred_mask = np.argmax(np.concatenate([bg[..., np.newaxis], cam], axis=-1), axis=-1)
                             meter_dic[th].add(pred_mask, gt_mask)
+                            f1_meter_dic[th].add(pred_mask, gt_mask)
                 sys.stdout.write('\r# Evaluation [{}/{}] = {:.2f}%'.format(step + 1, length, (step + 1) / length * 100))
                 sys.stdout.flush()
         model2.train()
 
         best_th = 0.0
         best_mIoU = 0.0
+        best_f1 = 0.0
 
         for th in thresholds:
             mIoU, mIoU_foreground = meter_dic[th].get(clear=True)
+            f1 = f1_meter_dic[th].get(clear=True)
             if best_mIoU < mIoU_foreground:
                 best_th = th
                 best_mIoU = mIoU_foreground
+                best_f1 = f1
 
-        return valid_meter.get(clear=True), best_th, best_mIoU
+        return valid_meter.get(clear=True), best_th, best_mIoU, best_f1
 
     
     writer = SummaryWriter(tensorboard_dir)
@@ -351,6 +353,7 @@ if __name__ == '__main__':
         train_meter.add({
             'loss' : loss.item(), 
             'class_loss' : class_loss.item(),
+            'loss_cross' : loss_cross.item(),
             'accuracy':acc1
         })
         
@@ -358,7 +361,7 @@ if __name__ == '__main__':
         # For Log
         #################################################################################################
         if (iteration + 1) % log_iteration == 0:
-            loss, class_loss,acc1 = train_meter.get(clear=True)
+            loss, class_loss, loss_cross, acc1 = train_meter.get(clear=True)
             learning_rate = float(get_learning_rate_from_optimizer(optimizer))
             
             data = {
@@ -366,6 +369,7 @@ if __name__ == '__main__':
                 'learning_rate' : learning_rate,
                 'loss' : loss,
                 'class_loss' : class_loss,
+                'loss_cross' : loss_cross,
                 'acc1':acc1,
                 'time' : train_timer.tok(clear=True),
             }
@@ -376,12 +380,14 @@ if __name__ == '__main__':
                 learning_rate={learning_rate:.4f}, \
                 loss={loss:.4f}, \
                 class_loss={class_loss:.4f}, \
+                loss_cross={loss_cross:.4f}, \
                 acc1={acc1:.4f},\
                 time={time:.0f}sec'.format(**data)
             )
 
             writer.add_scalar('Train/loss', loss, iteration)
             writer.add_scalar('Train/class_loss', class_loss, iteration)
+            writer.add_scalar('Train/loss_cross', loss_cross, iteration)
             writer.add_scalar('Train/learning_rate', learning_rate, iteration)
             writer.add_scalar('Train/acc1', acc1, iteration)
         
@@ -390,16 +396,16 @@ if __name__ == '__main__':
         ################################################################################################
         # if True:
         if (iteration + 1) % val_iteration == 0:
-            (valid_loss,val_acc1),threshold, mIoU = evaluate(valid_loader)
+            (valid_loss,val_acc1),threshold, mIoU, f1 = evaluate(valid_loader)
             
             if best_acc1 == -1 or best_acc1 < val_acc1:
                 best_acc1 = val_acc1
 
-            if best_train_mIoU == -1 or best_train_mIoU < mIoU:
-                best_train_mIoU = mIoU
+            if best_f1 == -1 or best_f1 < f1:
+                best_f1 = f1
 
                 save_model_fn()
-                log_func('[i] save model')
+                log_func('[i] save model (best F1)')
 
             data = {
                 'iteration' : iteration + 1,
@@ -408,7 +414,8 @@ if __name__ == '__main__':
                 'val_acc1' : val_acc1,
                 'train_mIoU':mIoU,
                 'threshold':threshold,
-                'best_train_mIoU':best_train_mIoU,
+                'f1':f1,
+                'best_f1':best_f1,
                 'time' : eval_timer.tok(clear=True),
             }
             data_dic['validation'].append(data)
@@ -421,13 +428,16 @@ if __name__ == '__main__':
                 best_acc1={best_acc1:.4f}%, \
                 threshold={threshold:.2f}, \
                 train_mIoU={train_mIoU:.2f}%, \
-                best_train_mIoU={best_train_mIoU:.2f}%, \
+                f1={f1:.2f}%, \
+                best_f1={best_f1:.2f}%, \
                 time={time:.0f}sec'.format(**data)
             )
             
             
             writer.add_scalar('Evaluation/valid_loss', valid_loss, iteration)
             writer.add_scalar('Evaluation/valid_acc1', val_acc1, iteration)
+            writer.add_scalar('Evaluation/f1', f1, iteration)
+            writer.add_scalar('Evaluation/best_f1', best_f1, iteration)
             writer.add_scalar('Evaluation/best_acc1', best_acc1, iteration)
     
 

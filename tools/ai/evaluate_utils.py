@@ -77,3 +77,36 @@ class Calculator_For_mIoU:
             self.TP.append(0)
             self.P.append(0)
             self.T.append(0)
+
+
+class Calculator_For_F1:
+    def __init__(self):
+        self.class_names = ['background'] + ['change']
+        self.classes = len(self.class_names)
+        self.clear()
+
+    def add(self, pred_mask, gt_mask):
+        # 统计 TP, P(预测总数), T(标签总数)
+        # 这里重点计算 index 1 (change)
+        for i in range(self.classes):
+            self.TP[i] += np.sum((pred_mask == i) & (gt_mask == i))
+            self.P[i] += np.sum(pred_mask == i)
+            self.T[i] += np.sum(gt_mask == i)
+
+    def get(self, clear=True):
+        # 计算 Change 类的 F1 (index 1)
+        i = 1 
+        precision = self.TP[i] / (self.P[i] + 1e-10)
+        recall = self.TP[i] / (self.T[i] + 1e-10)
+        
+        f1 = (2 * precision * recall) / (precision + recall + 1e-10) * 100
+        
+        if clear:
+            self.clear()
+            
+        return f1
+
+    def clear(self):
+        self.TP = [0] * self.classes
+        self.P = [0] * self.classes
+        self.T = [0] * self.classes
