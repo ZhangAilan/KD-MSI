@@ -22,7 +22,7 @@ from tools.ai.evaluate_utils import Calculator_For_mIoU
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
 from core.adapter import DinoToClipProjector
-from core.loss import FocalLoss, BinaryDiceLoss
+from core.loss import FocalLoss
 
 parser = argparse.ArgumentParser()
 
@@ -180,15 +180,14 @@ if __name__ == '__main__':
     clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
 
     #DINO CLIP Adaptor
-    # projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
-    projector_dino_clip = DinoToClipProjector(in_dim=1024, out_dim=768).to(device)
+    projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
+    # projector_dino_clip = DinoToClipProjector(in_dim=1024, out_dim=768).to(device)
     
     ###################################################################################
     # Loss, Optimizer
     ###################################################################################
     class_loss_fn = nn.BCEWithLogitsLoss().cuda()
     loss_focal=FocalLoss()
-    loss_dice=BinaryDiceLoss()
 
     log_func('[i] The number of pretrained weights : {}'.format(len(param_groups[0])))
     log_func('[i] The number of pretrained bias : {}'.format(len(param_groups[1])))
@@ -324,9 +323,6 @@ if __name__ == '__main__':
             cross_modal_features = torch.softmax(cross_modal_features, dim=1)
             cross_modal_features_list.append(cross_modal_features)
         cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0) # [8, 2, 16, 16]
-        # print(cross_modal_features.shape) [8, 2, 16, 16]
-        # cross_modal_features = cross_modal_features[:,1:2,:,:]  #获取第二个维度
-        # print(cross_modal_features.shape) #[8, 1, 16, 16]
 
         #生成CAM
         logits , features1= model(imageA,imageB)
@@ -341,10 +337,6 @@ if __name__ == '__main__':
         class_loss = class_loss_fn(logits, labels).mean()
 
         #计算跨模态损失
-        # loss_cross = (
-        #     loss_focal(cross_modal_features,cam2) +
-        #     loss_dice(cross_modal_features[:, 1, :, :],cam2)
-        # )
         # loss_cross=nn.MSELoss()(cam2,cross_modal_features[:, 1:2, :, :])
         loss_cross=loss_focal(cross_modal_features,cam2)
 
