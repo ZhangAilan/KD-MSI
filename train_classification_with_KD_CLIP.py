@@ -314,7 +314,6 @@ if __name__ == '__main__':
             LOGITS_SCALE=100.0
             cross_modal_features=LOGITS_SCALE*patch_features@text_features
             # print(cross_modal_features.shape) #[8, 256, 2]
-            #2D门控图
             B,N,C=cross_modal_features.shape
             H,W=int(np.sqrt(N)),int(np.sqrt(N))
             cross_modal_features = cross_modal_features.view(B, H, W, C)
