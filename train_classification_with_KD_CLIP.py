@@ -21,6 +21,7 @@ from tools.ai.torch_utils import load_model, set_seed, make_cam, save_model, get
 from tools.ai.evaluate_utils import Calculator_For_mIoU
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
+from core.adapter import DinoToClipProjector
 
 
 parser = argparse.ArgumentParser()
@@ -179,7 +180,8 @@ if __name__ == '__main__':
     clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
 
     #DINO CLIP Adaptor
-    projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
+    # projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
+    projector_dino_clip = DinoToClipProjector(in_dim=1024, out_dim=768).to(device)
     
     ###################################################################################
     # Loss, Optimizer
@@ -233,45 +235,28 @@ if __name__ == '__main__':
         with torch.no_grad():
             length = len(loader)
             for step, (imageA, imageB, labels,gt_masks) in enumerate(loader):
-
-
                 imageA = imageA.cuda()
                 imageB = imageB.cuda()
                 labels =  labels.cuda()                                                  
-
-                logits, features = model2(imageA,imageB)
-                
+                logits, features = model2(imageA,imageB)              
                 loss = class_loss_fn(logits, labels).mean()
                 acc = accuracy(logits, labels)
-
                 mask = labels.unsqueeze(2).unsqueeze(3)
                 cams = torch.sigmoid(features)*mask
-
-                
-
                 valid_meter.add({'val_loss': loss.item(),'val_acc':acc})
 
                 for batch_index in range(imageA.size()[0]):
                         # c, h, w -> h, w, c
                         cam = get_numpy_from_tensor(cams[batch_index]).transpose((1, 2, 0))
-
-
                         cam = cv2.resize(cam,(256,256),interpolation=cv2.INTER_NEAREST)
                         cam = cam.reshape(cam.shape[0],cam.shape[1],1)
-
                         gt_mask = get_numpy_from_tensor(gt_masks[batch_index])                      
-
                         h, w,c = cam.shape
                         gt_mask = cv2.resize(gt_mask, (h,w), interpolation=cv2.INTER_NEAREST)
-
                         for th in thresholds:
                             bg = np.ones_like(cam[:, :, 0]) * th
                             pred_mask = np.argmax(np.concatenate([bg[..., np.newaxis], cam], axis=-1), axis=-1)
-
                             meter_dic[th].add(pred_mask, gt_mask)
-
-                    # break
-
                 sys.stdout.write('\r# Evaluation [{}/{}] = {:.2f}%'.format(step + 1, length, (step + 1) / length * 100))
                 sys.stdout.flush()
         model2.train()
@@ -348,16 +333,14 @@ if __name__ == '__main__':
         cam1 = cam.clone().detach()  #教师cam
         cam2 = F.sigmoid(features2)  #学生cam
 
-        cam1=cam1*cross_modal_features  #门控
-
-        # loss_cross = nn.MSELoss()(cam2, cross_modal_features)
+        loss_cross = nn.MSELoss()(cam2, cross_modal_features)
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
 
         acc1= accuracy(logits, labels)
 
         #加上跨模态损失
-        loss = class_loss + 10*loss_kd
+        loss = class_loss + 10*loss_kd+10*loss_cross
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
