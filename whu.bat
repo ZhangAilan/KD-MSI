@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\whu_CDC_dataset\whu_CDC_dataset_converted
-set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat_CLIP_linear_Focal
+set EXPERIMENT_TAG=WHU_KD_T_minus_S_cat_CD-DINO-RS
 
 echo ==========================================
 echo Change Detection Pipeline Runner
