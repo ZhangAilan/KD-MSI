@@ -401,7 +401,7 @@ if __name__ == '__main__':
         #################################################################################################
         if (iteration + 1) % log_iteration == 0:
             loss, class_loss,acc1 = train_meter.get(clear=True)
-            learning_rate = float(get_learning_rate_from_optimizer(optimizer))
+            learning_rate = float(get_learning_rate_from_optimizer(optimizer_siamese))
             
             data = {
                 'iteration' : iteration + 1,
