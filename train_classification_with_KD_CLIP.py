@@ -206,6 +206,7 @@ if __name__ == '__main__':
 
     best_acc1 = -1
     best_f1 = -1
+    best_mIoU = -1
     thresholds = list(np.arange(0.10, 1, 0.05))
     no_save_counter = 0
     
@@ -382,6 +383,9 @@ if __name__ == '__main__':
             
             if best_acc1 == -1 or best_acc1 < val_acc1:
                 best_acc1 = val_acc1
+
+            if best_mIoU == -1 or best_mIoU < mIoU:
+                best_mIoU = mIoU
 
             if best_f1 == -1 or best_f1 < f1:
                 best_f1 = f1
