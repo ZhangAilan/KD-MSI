@@ -20,8 +20,7 @@ from tools.ai.torch_utils import load_model, set_seed, make_cam, save_model, get
 from tools.ai.evaluate_utils import Calculator_For_mIoU, Calculator_For_F1
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
-from core.adapter import CLIP_Inplanted
-from core.loss import FocalLoss, BinaryDiceLoss
+from core.loss import FocalLoss,BinaryDiceLoss
 
 parser = argparse.ArgumentParser()
 ###############################################################################
@@ -164,14 +163,7 @@ if __name__ == '__main__':
     clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
 
     #DINO CLIP Adaptor
-    dino_clip_adaptor=CLIP_Inplanted(c_in=1024, device=device)
-    dino_clip_adaptor.to(device).train()
-    adaptor_update_params = ["patch_token_adapter", "cls_token_adapter", "prompt_adapter"]
-    adaptor_params_to_update = []
-    for name, param in dino_clip_adaptor.named_parameters():
-        if any(k in name  for k in adaptor_update_params):
-            print(f"Learnable parameter: {name}")
-            adaptor_params_to_update.append(param)
+    projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
     
     ###################################################################################
     # Loss, Optimizer
@@ -196,22 +188,10 @@ if __name__ == '__main__':
         {'params': param_groups2[1], 'lr': 2*args.lr, 'weight_decay': 0},
         {'params': param_groups2[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
         {'params': param_groups2[3], 'lr': 20*args.lr, 'weight_decay': 0},
+
+        {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
     ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
 
-    # DINO CLIP Adaptor Optimizer
-    optimizer_clip = torch.optim.AdamW(
-        adaptor_params_to_update,
-        lr=args.lr,
-        betas=(0.9, 0.999),
-        weight_decay=1e-2,
-    )
-    total_steps = args.max_epoch * len(train_loader)
-    warmup_steps = int(0.03 * total_steps)
-    scheduler_clip = torch.optim.lr_scheduler.LambdaLR(
-        optimizer_clip, 
-        lr_lambda=lambda step: step / float(max(1, warmup_steps)) if step < warmup_steps else 1.0
-    )
-    
     #################################################################################################
     # Train
     #################################################################################################
@@ -303,44 +283,25 @@ if __name__ == '__main__':
                     text_features[i] = encode_text_for_change_detection(clip_model, device, batch_change_sentences=sentences[i])     
         # print(text_features.shape) #[8, 768, 2]
 
-        adjust_feats_0=[]
-        adjust_feats_1=[]
-        for i in range(len(imageA)):
-            f0=dino_clip_adaptor.prompt_adapter[0](text_features[i, :, 0])[0]
-            f1=dino_clip_adaptor.prompt_adapter[1](text_features[i, :, 1])[0]
-            adjust_feats_0.append(f0)
-            adjust_feats_1.append(f1)
-        adjusted_feats_0 = torch.stack(adjust_feats_0, dim=0)
-        adjusted_feats_1 = torch.stack(adjust_feats_1, dim=0)
-        adjusted_text_feature = torch.cat([adjusted_feats_0, adjusted_feats_1], dim=1).view(len(imageA), 768, 2) 
-        # print('adjusted_text_feature.shape',adjusted_text_feature.shape) #[8, 768, 2]
-
         #视觉特征
-        cls_token_A,patch_tokens_A=get_feature_dinov3(imageA, device, dino_model)
-        cls_token_B,patch_tokens_B=get_feature_dinov3(imageB, device, dino_model)
-        # print(cls_token_A[0].shape) #[8, 1, 1024]
+        _,patch_tokens_A=get_feature_dinov3(imageA, device, dino_model)
+        _,patch_tokens_B=get_feature_dinov3(imageB, device, dino_model)
         # print(patch_tokens_A[0].shape) #[8, 196, 1024])
 
         #文字与视觉特征适配
         cross_modal_features_list=[]
-        cross_global_change_scores=[]
         for i in range(4):
-            cls_features_A = dino_clip_adaptor.cls_token_adapter[i](cls_token_A[i])[0]
-            cls_features_B = dino_clip_adaptor.cls_token_adapter[i](cls_token_B[i])[0]
-            cls_features=torch.abs(torch.sub(cls_features_A, cls_features_B))
-            patch_features_A = dino_clip_adaptor.patch_token_adapter[i](patch_tokens_A[i])[0]
-            patch_features_B = dino_clip_adaptor.patch_token_adapter[i](patch_tokens_B[i])[0]
+            patch_features_A = projector_dino_clip(patch_tokens_A[i])
+            patch_features_B = projector_dino_clip(patch_tokens_B[i])
             patch_features=torch.abs(torch.sub(patch_features_A, patch_features_B))
             #归一化
             eps=1e-6
-            cls_features=cls_features/(cls_features.norm(dim=-1, keepdim=True)+eps)
             patch_features=patch_features/(patch_features.norm(dim=-1, keepdim=True)+eps)
-            # print(cls_features.shape) #[8, 1, 768]
             # print(patch_features.shape) #[8, 196, 768]
 
             #跨模态
             LOGITS_SCALE=100.0
-            cross_modal_features=LOGITS_SCALE*patch_features@adjusted_text_feature
+            cross_modal_features=LOGITS_SCALE*patch_features@text_features
             # print(cross_modal_features.shape) #[8, 196, 2]
             B,N,C=cross_modal_features.shape
             H,W=int(np.sqrt(N)),int(np.sqrt(N))
@@ -349,12 +310,7 @@ if __name__ == '__main__':
             # print(cross_modal_features.shape) #[8, 2, 256, 256]
             cross_modal_features = torch.softmax(cross_modal_features, dim=1)
             cross_modal_features_list.append(cross_modal_features)
-
-            #全局
-            change_score=100*cls_features@adjusted_text_feature
-            cross_global_change_scores.append(change_score)
         cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0) # [8, 2, 256, 256]
-        cross_global_change_scores = torch.mean(torch.stack(cross_global_change_scores, dim=0), dim=0) ##[8, 1, 2]
 
         #生成CAM
         logits , features1= model(imageA,imageB)
@@ -376,17 +332,13 @@ if __name__ == '__main__':
             loss_focal(cross_modal_features,cam2)
             +loss_dice(cross_modal_features[:, 1, :, :],cam2)
         )
-        loss_cross_global_score=F.cross_entropy(cross_global_change_scores.squeeze(1), labels.to(device).long().squeeze())
 
         #加上跨模态损失
-        loss = class_loss + 10*loss_kd + 5*loss_cross_global_score + 10*loss_cross_seg
+        loss = class_loss + 10*loss_kd + 10*loss_cross_seg
 
         optimizer_siamese.zero_grad()
-        optimizer_clip.zero_grad()
         loss.backward()
         optimizer_siamese.step()
-        optimizer_clip.step()
-        scheduler_clip.step()
 
         acc1= accuracy(logits, labels)
         train_meter.add({
