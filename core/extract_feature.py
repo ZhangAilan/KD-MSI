@@ -1,4 +1,5 @@
 import torch
+import torchvision.transforms as transforms
 from CLIP.tokenizer import tokenize as tokenize
 
 def encode_text_for_change_detection(clip_model, device,batch_change_sentences=None):
@@ -52,16 +53,20 @@ def encode_text_for_change_detection(clip_model, device,batch_change_sentences=N
 
 
 def get_feature_dinov3(batch_img, device, dino_model):
+    # 调整输入图像大小为 224x224
+    resize_transform = transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC)
+    batch_img_resized = resize_transform(batch_img)
+
     with torch.no_grad():
         layers = [5, 11, 17, 23]
         patch_tokens_dict = {i: [] for i in layers}
         cls_tokens_dict = {i: [] for i in layers}
 
-        for j in range(len(batch_img)):
+        for j in range(len(batch_img_resized)):
             patch_dict, tokens_dict, cls_dict = {}, {}, {}
             handles = []
 
-            image = batch_img[j].unsqueeze(0).to(device)
+            image = batch_img_resized[j].unsqueeze(0).to(device)
 
             anchor = getattr(dino_model, "norm", None) or getattr(dino_model, "fc_norm", None)
             assert anchor is not None, "There is no norm/fc_norm module, please print(dino_model) to confirm the name"

@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 import glob
 from torch.utils.data._utils.collate import default_collate
@@ -21,18 +20,16 @@ from tools.ai.torch_utils import load_model, set_seed, make_cam, save_model, get
 from tools.ai.evaluate_utils import Calculator_For_mIoU, Calculator_For_F1
 from CLIP.clip import create_model
 from core.extract_feature import encode_text_for_change_detection, get_feature_dinov3
-from core.adapter import DinoToClipProjector
-from core.loss import FocalLoss
+from core.adapter import CLIP_Inplanted
+from core.loss import FocalLoss, BinaryDiceLoss
 
 parser = argparse.ArgumentParser()
-
 ###############################################################################
 # Dataset
 ###############################################################################
 parser.add_argument('--seed', default=0, type=int)
 parser.add_argument('--num_workers', default=8, type=int)
 parser.add_argument('--data_dir', default='', type=str)
-
 ###############################################################################
 # Network
 ###############################################################################
@@ -45,21 +42,13 @@ parser.add_argument('--student', default='minus', type=str)
 ###############################################################################
 parser.add_argument('--batch_size', default=8, type=int)
 parser.add_argument('--max_epoch', default=20, type=int)
-
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--wd', default=1e-4, type=float)
 parser.add_argument('--nesterov', default=True, type=str2bool)
-
 parser.add_argument('--image_size', default=256, type=int)
-
 parser.add_argument('--print_ratio', default=0.1, type=float)
-
 parser.add_argument('--tag', required=True, type=str)
 
-def accuracy(pred, y):
-    correct = sum(row.all().int().item() for row in (pred.ge(0) == y))
-    n = y.shape[0]
-    return correct / n
 
 def custom_collate(batch):
     # Separate the batch into components
@@ -118,7 +107,6 @@ if __name__ == '__main__':
 
     log_dir = create_directory(f'./experiments/logs/')
     model_dir = create_directory('./experiments/models/')
-    tensorboard_dir = create_directory(f'./experiments/tensorboards/{args.tag}/')
 
     log_path = log_dir + f'{args.tag}.txt'
     model_path = model_dir + f'{args.tag}.pth'
@@ -160,7 +148,6 @@ if __name__ == '__main__':
     ###################################################################################
     model = Classifier_Siamese(args.architecture, 1, args.mode, args.teacher)
     model2 = Classifier_Siamese(args.architecture, 1, args.mode, args.student)
-    
     param_groups = model.get_parameter_groups(print_fn=None)
     param_groups2 = model2.get_parameter_groups(print_fn=None)
     
@@ -177,21 +164,29 @@ if __name__ == '__main__':
     clip_model = load_clip_model(device,'ViT-L-14-336px.pt')
 
     #DINO CLIP Adaptor
-    projector_dino_clip=nn.Linear(1024, 768, bias=False).cuda()
-    # projector_dino_clip = DinoToClipProjector(in_dim=1024, out_dim=768).to(device)
+    dino_clip_adaptor=CLIP_Inplanted(c_in=1024, device=device)
+    dino_clip_adaptor.to(device).train()
+    adaptor_update_params = ["patch_token_adapter", "cls_token_adapter", "prompt_adapter"]
+    adaptor_params_to_update = []
+    for name, param in dino_clip_adaptor.named_parameters():
+        if any(k in name  for k in adaptor_update_params):
+            print(f"Learnable parameter: {name}")
+            adaptor_params_to_update.append(param)
     
     ###################################################################################
     # Loss, Optimizer
     ###################################################################################
     class_loss_fn = nn.BCEWithLogitsLoss().cuda()
     loss_focal=FocalLoss()
+    loss_dice=BinaryDiceLoss()
 
     log_func('[i] The number of pretrained weights : {}'.format(len(param_groups[0])))
     log_func('[i] The number of pretrained bias : {}'.format(len(param_groups[1])))
     log_func('[i] The number of scratched weights : {}'.format(len(param_groups[2])))
     log_func('[i] The number of scratched bias : {}'.format(len(param_groups[3])))
     
-    optimizer = PolyOptimizer([
+    #Siamese Optimizer
+    optimizer_siamese = PolyOptimizer([
         {'params': param_groups[0], 'lr': args.lr, 'weight_decay': args.wd},
         {'params': param_groups[1], 'lr': 2*args.lr, 'weight_decay': 0},
         {'params': param_groups[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
@@ -201,10 +196,21 @@ if __name__ == '__main__':
         {'params': param_groups2[1], 'lr': 2*args.lr, 'weight_decay': 0},
         {'params': param_groups2[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
         {'params': param_groups2[3], 'lr': 20*args.lr, 'weight_decay': 0},
-
-        {'params': projector_dino_clip.parameters(), 'lr': 10 * args.lr, 'weight_decay': args.wd},
-
     ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
+
+    # DINO CLIP Adaptor Optimizer
+    optimizer_clip = torch.optim.AdamW(
+        adaptor_params_to_update,
+        lr=args.lr,
+        betas=(0.9, 0.999),
+        weight_decay=1e-2,
+    )
+    total_steps = args.max_epoch * len(train_loader)
+    warmup_steps = int(0.03 * total_steps)
+    scheduler_clip = torch.optim.lr_scheduler.LambdaLR(
+        optimizer_clip, 
+        lr_lambda=lambda step: step / float(max(1, warmup_steps)) if step < warmup_steps else 1.0
+    )
     
     #################################################################################################
     # Train
@@ -216,8 +222,7 @@ if __name__ == '__main__':
 
     train_timer = Timer()
     eval_timer = Timer()
-
-    train_meter = Average_Meter(['loss', 'class_loss', 'loss_cross', 'accuracy'])
+    train_meter = Average_Meter(['loss', 'class_loss', 'accuracy'])
 
     best_acc1 = -1
     best_f1 = -1
@@ -276,9 +281,8 @@ if __name__ == '__main__':
         return valid_meter.get(clear=True), best_th, best_mIoU, best_f1
 
     
-    writer = SummaryWriter(tensorboard_dir)
+    # Train Iterator
     train_iterator = Iterator(train_loader)                                                          
-
     no_change_text_feature = encode_text_for_change_detection(clip_model=clip_model, device=device)
     for iteration in range(max_iteration):
         imageA, imageB, labels,sentences = train_iterator.get()
@@ -298,62 +302,97 @@ if __name__ == '__main__':
                     text_features[i] = encode_text_for_change_detection(clip_model, device, batch_change_sentences=sentences[i])     
         # print(text_features.shape) #[8, 768, 2]
 
+        adjust_feats_0=[]
+        adjust_feats_1=[]
+        for i in range(len(imageA)):
+            f0=dino_clip_adaptor.prompt_adapter[0](text_features[i, :, 0])[0]
+            f1=dino_clip_adaptor.prompt_adapter[1](text_features[i, :, 1])[0]
+            adjust_feats_0.append(f0)
+            adjust_feats_1.append(f1)
+        adjusted_feats_0 = torch.stack(adjust_feats_0, dim=0)
+        adjusted_feats_1 = torch.stack(adjust_feats_1, dim=0)
+        adjusted_text_feature = torch.cat([adjusted_feats_0, adjusted_feats_1], dim=1).view(len(imageA), 768, 2) 
+        # print('adjusted_text_feature.shape',adjusted_text_feature.shape) #[8, 768, 2]
+
         #视觉特征
-        _,patch_tokens_A=get_feature_dinov3(imageA, device, dino_model)
-        _,patch_tokens_B=get_feature_dinov3(imageB, device, dino_model)
-        # print(patch_tokens_A[0].shape) #[8, 256, 1024]
+        cls_token_A,patch_tokens_A=get_feature_dinov3(imageA, device, dino_model)
+        cls_token_B,patch_tokens_B=get_feature_dinov3(imageB, device, dino_model)
+        # print(cls_token_A[0].shape) #[8, 1, 1024]
+        # print(patch_tokens_A[0].shape) #[8, 196, 1024])
 
         #文字与视觉特征适配
         cross_modal_features_list=[]
+        cross_global_change_scores=[]
         for i in range(4):
-            pathch_features_A=projector_dino_clip(patch_tokens_A[i])
-            pathch_features_B=projector_dino_clip(patch_tokens_B[i])
-            patch_features=torch.abs(torch.sub(pathch_features_A, pathch_features_B))
+            cls_features_A = dino_clip_adaptor.cls_token_adapter[i](cls_token_A[i])[0]
+            cls_features_B = dino_clip_adaptor.cls_token_adapter[i](cls_token_B[i])[0]
+            cls_features=torch.abs(torch.sub(cls_features_A, cls_features_B))
+            patch_features_A = dino_clip_adaptor.patch_token_adapter[i](patch_tokens_A[i])[0]
+            patch_features_B = dino_clip_adaptor.patch_token_adapter[i](patch_tokens_B[i])[0]
+            patch_features=torch.abs(torch.sub(patch_features_A, patch_features_B))
             #归一化
             eps=1e-6
+            cls_features=cls_features/(cls_features.norm(dim=-1, keepdim=True)+eps)
             patch_features=patch_features/(patch_features.norm(dim=-1, keepdim=True)+eps)
-            # print(patch_features.shape) #[8, 256, 768]
+            # print(cls_features.shape) #[8, 1, 768]
+            # print(patch_features.shape) #[8, 196, 768]
+
             #跨模态
             LOGITS_SCALE=100.0
-            cross_modal_features=LOGITS_SCALE*patch_features@text_features
-            # print(cross_modal_features.shape) #[8, 256, 2]
+            cross_modal_features=LOGITS_SCALE*patch_features@adjusted_text_feature
+            # print(cross_modal_features.shape) #[8, 196, 2]
             B,N,C=cross_modal_features.shape
             H,W=int(np.sqrt(N)),int(np.sqrt(N))
-            cross_modal_features = cross_modal_features.view(B, H, W, C)
-            cross_modal_features = cross_modal_features.permute(0, 3, 1, 2)
-            # print(cross_modal_features.shape) #[8, 2, 16, 16]
+            cross_modal_features = F.interpolate(cross_modal_features.permute(0, 2, 1).view(B, 2, H, W),
+                                    size=256, mode='bilinear', align_corners=True)
+            # print(cross_modal_features.shape) #[8, 2, 256, 256]
             cross_modal_features = torch.softmax(cross_modal_features, dim=1)
             cross_modal_features_list.append(cross_modal_features)
-        cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0) # [8, 2, 16, 16]
+
+            #全局
+            change_score=100*cls_features@adjusted_text_feature
+            cross_global_change_scores.append(change_score)
+        cross_modal_features = torch.mean(torch.stack(cross_modal_features_list, dim=0), dim=0) # [8, 2, 256, 256]
+        cross_global_change_scores = torch.mean(torch.stack(cross_global_change_scores, dim=0), dim=0) ##[8, 1, 2]
 
         #生成CAM
         logits , features1= model(imageA,imageB)
         logits2 ,features2 = model2(imageA,imageB)
+        # print(logits2.shape) #[8, 1]
 
         cam = make_cam(features1)*labels.unsqueeze(2).unsqueeze(3)
         cam1 = cam.clone().detach()  #教师cam
         cam2 = F.sigmoid(features2)  #学生cam 
         # print(cam2.shape) #[8, 1, 16, 16]
 
+        #CAM损失
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
 
-        #计算跨模态损失
-        # loss_cross=nn.MSELoss()(cam2,cross_modal_features[:, 1:2, :, :])
-        loss_cross=loss_focal(cross_modal_features,cam2)
-
-        acc1= accuracy(logits, labels)
+        #跨模态损失
+        cam2 = F.interpolate(cam2, size=256, mode='bilinear', align_corners=True)
+        loss_cross_seg=(
+            loss_focal(cross_modal_features,cam2)
+            +loss_dice(cross_modal_features[:, 1, :, :],cam2)
+        )
+        loss_cross_global_score=F.cross_entropy(cross_global_change_scores.squeeze(1), labels.to(device).long().squeeze())
+        
+        print(f"loss_kd: {loss_kd.item():.4f}, loss_cross_seg: {loss_cross_seg.item():.4f}, loss_cross_global_score: {loss_cross_global_score.item():.4f}")
 
         #加上跨模态损失
-        loss = class_loss + 10*loss_kd+10*loss_cross
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        loss = class_loss + 10*loss_kd + 5*loss_cross_global_score + 10*loss_cross_seg
 
+        optimizer_siamese.zero_grad()
+        optimizer_clip.zero_grad()
+        loss.backward()
+        optimizer_siamese.step()
+        optimizer_clip.step()
+        scheduler_clip.step()
+
+        acc1= accuracy(logits, labels)
         train_meter.add({
             'loss' : loss.item(), 
             'class_loss' : class_loss.item(),
-            'loss_cross' : loss_cross.item(),
             'accuracy':acc1
         })
         
@@ -361,7 +400,7 @@ if __name__ == '__main__':
         # For Log
         #################################################################################################
         if (iteration + 1) % log_iteration == 0:
-            loss, class_loss, loss_cross, acc1 = train_meter.get(clear=True)
+            loss, class_loss,acc1 = train_meter.get(clear=True)
             learning_rate = float(get_learning_rate_from_optimizer(optimizer))
             
             data = {
@@ -369,7 +408,6 @@ if __name__ == '__main__':
                 'learning_rate' : learning_rate,
                 'loss' : loss,
                 'class_loss' : class_loss,
-                'loss_cross' : loss_cross,
                 'acc1':acc1,
                 'time' : train_timer.tok(clear=True),
             }
@@ -380,16 +418,9 @@ if __name__ == '__main__':
                 learning_rate={learning_rate:.4f}, \
                 loss={loss:.4f}, \
                 class_loss={class_loss:.4f}, \
-                loss_cross={loss_cross:.4f}, \
                 acc1={acc1:.4f},\
                 time={time:.0f}sec'.format(**data)
             )
-
-            writer.add_scalar('Train/loss', loss, iteration)
-            writer.add_scalar('Train/class_loss', class_loss, iteration)
-            writer.add_scalar('Train/loss_cross', loss_cross, iteration)
-            writer.add_scalar('Train/learning_rate', learning_rate, iteration)
-            writer.add_scalar('Train/acc1', acc1, iteration)
         
         ################################################################################################
         # Evaluation
@@ -432,15 +463,3 @@ if __name__ == '__main__':
                 best_f1={best_f1:.2f}%, \
                 time={time:.0f}sec'.format(**data)
             )
-            
-            
-            writer.add_scalar('Evaluation/valid_loss', valid_loss, iteration)
-            writer.add_scalar('Evaluation/valid_acc1', val_acc1, iteration)
-            writer.add_scalar('Evaluation/f1', f1, iteration)
-            writer.add_scalar('Evaluation/best_f1', best_f1, iteration)
-            writer.add_scalar('Evaluation/best_acc1', best_acc1, iteration)
-    
-
-    writer.close()
-
-    print(args.tag)
