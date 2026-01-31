@@ -227,6 +227,7 @@ if __name__ == '__main__':
     best_acc1 = -1
     best_f1 = -1
     thresholds = list(np.arange(0.10, 1, 0.05))
+    no_save_counter = 0
     
     def evaluate(loader):
         model2.eval()
@@ -435,6 +436,9 @@ if __name__ == '__main__':
 
                 save_model_fn()
                 log_func('[i] save model (best F1)')
+                no_save_counter = 0
+            else:
+                no_save_counter += 1
 
             data = {
                 'iteration' : iteration + 1,
@@ -461,3 +465,7 @@ if __name__ == '__main__':
                 best_f1={best_f1:.2f}%, \
                 time={time:.0f}sec'.format(**data)
             )
+
+            if no_save_counter >= 5:
+                log_func('[i] Stop training: No model saved for 5 consecutive validation cycles')
+                break
