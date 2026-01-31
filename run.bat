@@ -43,12 +43,25 @@ IF ERRORLEVEL 1 (
 
 echo [INFO] git pull succeeded.
 
-:run_whu_bat
 REM ===============================
-REM 4. 执行 whu.bat
+REM 4. 选择执行 whu.bat 或 levir.bat
 REM ===============================
-echo [INFO] Running whu.bat...
-call whu.bat
+:choose_bat
+echo [INFO] Please choose which bat file to run:
+echo [INFO]   0 - Run whu.bat
+echo [INFO]   1 - Run levir.bat
+set /p bat_choice="Enter your choice (0/1): "
+
+if "!bat_choice!"=="0" (
+    echo [INFO] Running whu.bat...
+    call whu.bat
+) else if "!bat_choice!"=="1" (
+    echo [INFO] Running levir.bat...
+    call levir.bat
+) else (
+    echo [ERROR] Invalid choice. Please enter 0 or 1.
+    goto choose_bat
+)
 
 echo [INFO] All tasks completed.
 pause

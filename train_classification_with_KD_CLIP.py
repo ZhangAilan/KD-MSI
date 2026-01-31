@@ -401,6 +401,7 @@ if __name__ == '__main__':
                 'threshold':threshold,
                 'f1':f1,
                 'best_f1':best_f1,
+                'best_mIoU':best_mIoU,
                 'time' : eval_timer.tok(clear=True),
             }
             data_dic['validation'].append(data)
@@ -415,6 +416,7 @@ if __name__ == '__main__':
                 train_mIoU={train_mIoU:.2f}%, \
                 f1={f1:.2f}%, \
                 best_f1={best_f1:.2f}%, \
+                best_mIoU={best_mIoU:.2f}%, \
                 time={time:.0f}sec'.format(**data)
             )
 
