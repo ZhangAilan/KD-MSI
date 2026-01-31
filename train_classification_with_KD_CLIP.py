@@ -376,8 +376,6 @@ if __name__ == '__main__':
             +loss_dice(cross_modal_features[:, 1, :, :],cam2)
         )
         loss_cross_global_score=F.cross_entropy(cross_global_change_scores.squeeze(1), labels.to(device).long().squeeze())
-        
-        print(f"loss_kd: {loss_kd.item():.4f}, loss_cross_seg: {loss_cross_seg.item():.4f}, loss_cross_global_score: {loss_cross_global_score.item():.4f}")
 
         #加上跨模态损失
         loss = class_loss + 10*loss_kd + 5*loss_cross_global_score + 10*loss_cross_seg

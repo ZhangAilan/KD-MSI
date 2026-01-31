@@ -14,7 +14,22 @@ IF ERRORLEVEL 1 (
 echo [INFO] Conda environment activated.
 
 REM ===============================
-REM 2. git pull（失败则循环）
+REM 2. 询问是否执行 git pull
+REM ===============================
+set /p do_git_pull="Do you want to run git pull? (y/n): "
+
+if /i "!do_git_pull!"=="y" (
+    goto git_pull_section
+) else if /i "!do_git_pull!"=="yes" (
+    goto git_pull_section
+) else (
+    echo [INFO] Skipping git pull as per user choice.
+    goto run_whu_bat
+)
+
+:git_pull_section
+REM ===============================
+REM 3. git pull（失败则循环）
 REM ===============================
 :git_pull_loop
 echo [INFO] Running git pull...
@@ -28,8 +43,9 @@ IF ERRORLEVEL 1 (
 
 echo [INFO] git pull succeeded.
 
+:run_whu_bat
 REM ===============================
-REM 3. 执行 whu.bat
+REM 4. 执行 whu.bat
 REM ===============================
 echo [INFO] Running whu.bat...
 call whu.bat
