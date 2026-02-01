@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 set CUDA_VISIBLE_DEVICES=0
 set DATA_DIR=E:\weakly_CD_dataset\dataset\Levir_CDC_dataset\Levir_CDC_dataset_converted
-set EXPERIMENT_TAG=LEVIR_KD_T_minus_S_cat_linear_Focal_Dice_224
+set EXPERIMENT_TAG=LEVIR_KD_T_abs_S_cat
 
 echo ==========================================
 echo Change Detection Pipeline Runner
