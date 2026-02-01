@@ -324,12 +324,15 @@ if __name__ == '__main__':
         cam2 = F.sigmoid(features2)  #学生cam 
         # print(cam2.shape) #[8, 1, 16, 16]
 
+        #cam1与cam2上采样
+        cam1 = F.interpolate(cam1, size=256, mode='bilinear', align_corners=True)
+        cam2 = F.interpolate(cam2, size=256, mode='bilinear', align_corners=True)
+
         #CAM损失
         loss_kd = nn.MSELoss()(cam2,cam1)
         class_loss = class_loss_fn(logits, labels).mean()
 
-        #跨模态损失
-        cam2 = F.interpolate(cam2, size=256, mode='bilinear', align_corners=True)
+        #跨模态损失  
         loss_cross_seg=(
             loss_focal(cross_modal_features,cam2)
             +loss_dice(cross_modal_features[:, 1, :, :],cam2)
