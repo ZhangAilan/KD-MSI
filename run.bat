@@ -24,7 +24,7 @@ if /i "!do_git_pull!"=="y" (
     goto git_pull_section
 ) else (
     echo [INFO] Skipping git pull as per user choice.
-    goto run_whu_bat
+    goto choose_bat
 )
 
 :git_pull_section
