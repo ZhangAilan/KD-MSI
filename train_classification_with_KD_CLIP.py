@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import glob
+from datetime import datetime
 from torch.utils.data._utils.collate import default_collate
 
 from core.networks import Classifier_Siamese
@@ -391,6 +392,8 @@ if __name__ == '__main__':
                 best_f1 = f1
 
                 save_model_fn()
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                log_func('[i] Model "{}" has been overwritten at {}'.format(model_path, timestamp))
                 log_func('[i] save model (best F1)')
                 no_save_counter = 0
             else:
